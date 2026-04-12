@@ -10,28 +10,34 @@ interface CodeBlockProps {
   maxHeight?: string
 }
 
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
 function highlightCode(code: string, language: string): string {
   if (language === 'ini' || language === 'conf') {
-    return code
+    return escapeHtml(code)
       .replace(/^(\[.+\])$/gm, '<span class="text-accent-cyan font-semibold">$1</span>')
       .replace(/^(#.*)$/gm, '<span class="text-slate-500 italic">$1</span>')
       .replace(/^(\w+)\s*=/gm, '<span class="text-accent-orange">$1</span> =')
   }
   if (language === 'bash' || language === 'sh') {
-    return code
+    return escapeHtml(code)
       .replace(/(^#.*$)/gm, '<span class="text-slate-500 italic">$1</span>')
       .replace(/(echo\s+"[^"]*")/g, '<span class="text-accent-green">$1</span>')
       .replace(/\b(apt|systemctl|sysctl|iptables|wg|wg-quick|netfilter-persistent|cat|chmod|mkdir|set)\b/g, '<span class="text-accent-cyan">$1</span>')
       .replace(/'[^']*'/g, '<span class="text-accent-orange">$&</span>')
   }
   if (language === 'powershell' || language === 'ps1') {
-    return code
+    return escapeHtml(code)
       .replace(/(^#.*$)/gm, '<span class="text-slate-500 italic">$1</span>')
       .replace(/\b(Write-Host|Invoke-WebRequest|Start-Process|Remove-Item|Out-File|Test-Path)\b/g, '<span class="text-accent-cyan">$1</span>')
       .replace(/-ForegroundColor\s+\w+/g, '<span class="text-accent-purple">$&</span>')
       .replace(/"[^"]*"/g, '<span class="text-accent-green">$&</span>')
   }
-  return code
+  return escapeHtml(code)
 }
 
 export function CodeBlock({ code, filename, language = 'bash', onCopy, onDownload, maxHeight }: CodeBlockProps) {

@@ -5,6 +5,15 @@ function placeholder(val: string, fallback: string): string {
   return val.trim() || `<${fallback}>`
 }
 
+/**
+ * Escape special characters for bash scripts to prevent command injection
+ */
+function escapeBash(str: string): string {
+  if (!str || typeof str !== 'string') return ''
+  // Allow only alphanumeric, hyphens, underscores, and spaces
+  return str.replace(/[^a-zA-Z0-9\s_-]/g, '').slice(0, 100)
+}
+
 export function generateWg0Server(cfg: ProjectConfig): string {
   const privKey = placeholder(cfg.keys.serverPrivateKey, 'SERVER_PRIVATE_KEY')
   const pubClient = placeholder(cfg.keys.clientPublicKey, 'CLIENT_PUBLIC_KEY')
@@ -46,7 +55,8 @@ export function generateSetupVps(cfg: ProjectConfig): string {
   const localIp = placeholder(cfg.localWireguardIp, 'LOCAL_WG_IP')
   const wgConf = generateWg0Server(cfg)
   const iptablesRules = generateIptablesRules(cfg.ports, vpsIp, localIp)
-  const projectName = cfg.projectName || 'GatewayManager'
+  const projectName = escapeBash(cfg.projectName || 'GatewayManager')
+  const wgPort = cfg.wireguardPort || 51820
 
   return `#!/bin/bash
 # GatewayManager — Setup VPS
@@ -88,7 +98,7 @@ echo ""
 echo "✓ Setup VPS terminé !"
 echo "  IP VPS     : ${vpsIp}"
 echo "  IP locale  : ${localIp}"
-echo "  Port WG    : ${cfg.wireguardPort || 51820}"
+echo "  Port WG    : ${wgPort}"
 echo ""
 echo "Vérification : wg show"
 `
@@ -123,7 +133,7 @@ const osInstallInfo: Record<string, { label: string; installCmd: string; startCm
 }
 
 export function generateSetupClientLinux(cfg: ProjectConfig): string {
-  const wgConf = generateWg0Client(cfg)
+  const wgConf = generescapeBash(cfg.projectName || 'GatewayManager')
   const projectName = cfg.projectName || 'GatewayManager'
   const info = osInstallInfo[cfg.targetOS] ?? osInstallInfo['linux-debian']
 
@@ -156,7 +166,7 @@ echo "Vérification : wg show"
 }
 
 export function generateSetupClientMacos(cfg: ProjectConfig): string {
-  const wgConf = generateWg0Client(cfg)
+  const wgConf = generescapeBash(cfg.projectName || 'GatewayManager')
   const projectName = cfg.projectName || 'GatewayManager'
 
   return `#!/bin/bash
@@ -193,7 +203,7 @@ echo "Vérification : wg show"
 
 export function generateSetupClientWindows(cfg: ProjectConfig): string {
   const wgConf = generateWg0Client(cfg)
-  const projectName = cfg.projectName || 'GatewayManager'
+  const projectName = escapeBash(cfg.projectName || 'GatewayManager')
 
   return `# GatewayManager — Setup Client Windows
 # Projet : ${projectName}
