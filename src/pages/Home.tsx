@@ -153,23 +153,7 @@ export function Home() {
         ))}
       </div>
 
-      {/* Stack badges */}
-      <div className="border border-bg-border rounded-xl p-6 bg-bg-surface">
-        <h2 className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-4">Stack technique</h2>
-        <div className="flex flex-wrap gap-2">
-          {stackBadges.map(({ label, color }) => (
-            <span
-              key={label}
-              className={`border rounded-md px-3 py-1.5 text-sm font-mono font-medium ${color}`}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-        <p className="mt-4 text-xs text-slate-600 font-mono">
-          100% front statique — zéro backend — tout se passe dans votre navigateur
-        </p>
-      </div>
+  
     </div>
   )
 }
