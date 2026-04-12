@@ -39,15 +39,6 @@ const navCards = [
   },
 ]
 
-const stackBadges = [
-  { label: 'WireGuard', color: 'border-accent-purple/30 text-accent-purple bg-accent-purple/5' },
-  { label: 'iptables', color: 'border-accent-orange/30 text-accent-orange bg-accent-orange/5' },
-  { label: 'React 18', color: 'border-accent-cyan/30 text-accent-cyan bg-accent-cyan/5' },
-  { label: 'TypeScript', color: 'border-blue-500/30 text-blue-400 bg-blue-500/5' },
-  { label: 'Vite', color: 'border-accent-green/30 text-accent-green bg-accent-green/5' },
-  { label: 'Tailwind', color: 'border-accent-cyan/30 text-accent-cyan bg-accent-cyan/5' },
-]
-
 function AsciiDiagram() {
   const [active, setActive] = useState(0)
 
