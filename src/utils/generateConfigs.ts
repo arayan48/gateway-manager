@@ -133,8 +133,8 @@ const osInstallInfo: Record<string, { label: string; installCmd: string; startCm
 }
 
 export function generateSetupClientLinux(cfg: ProjectConfig): string {
-  const wgConf = generescapeBash(cfg.projectName || 'GatewayManager')
-  const projectName = cfg.projectName || 'GatewayManager'
+  const wgConf = generateWg0Client(cfg)
+  const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const info = osInstallInfo[cfg.targetOS] ?? osInstallInfo['linux-debian']
 
   return `#!/bin/bash
@@ -166,8 +166,8 @@ echo "Vérification : wg show"
 }
 
 export function generateSetupClientMacos(cfg: ProjectConfig): string {
-  const wgConf = generescapeBash(cfg.projectName || 'GatewayManager')
-  const projectName = cfg.projectName || 'GatewayManager'
+  const wgConf = generateWg0Client(cfg)
+  const projectName = escapeBash(cfg.projectName || 'GatewayManager')
 
   return `#!/bin/bash
 # GatewayManager — Setup Client macOS
