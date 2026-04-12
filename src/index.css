@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background-color: #080c10;
+    color: #e2e8f0;
+    font-family: 'Syne', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #080c10;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e2a35;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3a4a;
+  }
+}
+
+@layer components {
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+
+  .nav-link {
+    @apply text-slate-400 hover:text-white transition-colors duration-200 text-sm font-medium;
+  }
+
+  .nav-link-active {
+    @apply text-white;
+  }
+
+  .btn-primary {
+    @apply bg-accent-green text-bg-base font-semibold px-4 py-2 rounded-lg hover:bg-opacity-90 transition-all duration-200 text-sm;
+  }
+
+  .btn-ghost {
+    @apply border border-bg-border text-slate-300 hover:border-accent-cyan hover:text-accent-cyan font-medium px-4 py-2 rounded-lg transition-all duration-200 text-sm;
+  }
+
+  .card {
+    @apply bg-bg-surface border border-bg-border rounded-xl p-6 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply hover:border-accent-cyan hover:bg-bg-elevated;
+  }
+
+  .input-field {
+    @apply w-full bg-bg-elevated border border-bg-border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-accent-cyan transition-colors font-mono;
+  }
+
+  .label {
+    @apply text-xs text-slate-400 font-medium mb-1 block;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold text-white mb-2;
+  }
+
+  .section-subtitle {
+    @apply text-slate-400 text-sm;
+  }
+}
+
+/* Animations */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes dataFlow {
+  0% { opacity: 0.2; transform: translateX(-4px); }
+  50% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0.2; transform: translateX(4px); }
+}
+
+.data-flow {
+  animation: dataFlow 2s ease-in-out infinite;
+}
+
+/* Syntax highlight overrides */
+.token-keyword { color: #ff79c6; }
+.token-string { color: #39d353; }
+.token-comment { color: #6272a4; }
+.token-number { color: #ffa657; }
+.token-operator { color: #58c4dd; }
+.token-variable { color: #b083f0; }

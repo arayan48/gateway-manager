@@ -1,0 +1,304 @@
+import { useState } from 'react'
+import { Plus, Trash2, Layers, Terminal, X } from 'lucide-react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useToast } from '../hooks/useToast'
+import { Toast } from '../components/ui/Toast'
+import { CodeBlock } from '../components/ui/CodeBlock'
+import { Badge } from '../components/ui/Badge'
+import { NoteBox } from '../components/ui/NoteBox'
+import type { PortEntry, Protocol } from '../types'
+import { PORT_PRESETS } from '../types'
+import { generateIptablesRules, generateVerificationCommands, generateFullBlock } from '../utils/portCommands'
+
+function genId() {
+  return Math.random().toString(36).slice(2, 9)
+}
+
+export function Ports() {
+  const { toasts, addToast, removeToast } = useToast()
+  const [ports, setPorts] = useLocalStorage<PortEntry[]>('gm-ports', [])
+  const [vpsIp, setVpsIp] = useLocalStorage('gm-vps-ip', '')
+  const [localWgIp, setLocalWgIp] = useLocalStorage('gm-local-wg-ip', '10.10.0.2')
+
+  const [newPort, setNewPort] = useState('')
+  const [newProto, setNewProto] = useState<Protocol>('tcp')
+  const [newLabel, setNewLabel] = useState('')
+
+  const addPort = () => {
+    const p = parseInt(newPort)
+    if (!p || p < 1 || p > 65535) {
+      addToast('Port invalide (1-65535)', 'error')
+      return
+    }
+    if (ports.some((x) => x.port === p && x.protocol === newProto)) {
+      addToast('Ce port/protocole existe déjà', 'error')
+      return
+    }
+    setPorts((prev) => [
+      ...prev,
+      { id: genId(), port: p, protocol: newProto, label: newLabel || `Port ${p}` },
+    ])
+    setNewPort('')
+    setNewLabel('')
+    addToast(`Port ${p} ajouté`)
+  }
+
+  const removePort = (id: string) => {
+    setPorts((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  const togglePreset = (preset: typeof PORT_PRESETS[0]) => {
+    const exists = ports.some((p) => p.port === preset.port)
+    if (exists) {
+      setPorts((prev) => prev.filter((p) => p.port !== preset.port))
+      addToast(`${preset.label} retiré`, 'info')
+    } else {
+      setPorts((prev) => [
+        ...prev,
+        { id: genId(), port: preset.port, protocol: preset.protocol, label: preset.label },
+      ])
+      addToast(`${preset.label} ajouté`)
+    }
+  }
+
+  const iptablesRules = generateIptablesRules(ports, vpsIp, localWgIp)
+  const verifyCommands = generateVerificationCommands(ports, vpsIp)
+  const fullBlock = generateFullBlock(ports, vpsIp, localWgIp)
+
+  const protoColors: Record<Protocol, 'green' | 'cyan' | 'orange'> = {
+    tcp: 'cyan',
+    udp: 'orange',
+    'tcp+udp': 'green',
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+      <Toast toasts={toasts} onRemove={removeToast} />
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-extrabold text-white mb-2 flex items-center gap-3">
+          <Layers className="text-accent-orange" size={28} />
+          Gestionnaire de ports
+        </h1>
+        <p className="text-slate-400 text-sm">
+          Configurez vos redirections iptables. Les données sont sauvegardées automatiquement.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: form */}
+        <div className="space-y-4">
+          {/* Config globale */}
+          <div className="card">
+            <h2 className="font-bold text-white text-sm mb-4">Configuration réseau</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="label">IP publique du VPS</label>
+                <input
+                  className="input-field"
+                  placeholder="ex: 185.142.21.45"
+                  value={vpsIp}
+                  onChange={(e) => setVpsIp(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">IP locale WireGuard (client)</label>
+                <input
+                  className="input-field"
+                  placeholder="ex: 10.10.0.2"
+                  value={localWgIp}
+                  onChange={(e) => setLocalWgIp(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Presets */}
+          <div className="card">
+            <h2 className="font-bold text-white text-sm mb-1">Presets rapides</h2>
+            <p className="text-xs text-slate-600 mb-3">Cliquez pour activer / désactiver</p>
+            <div className="flex flex-wrap gap-1.5">
+              {PORT_PRESETS.map((preset) => {
+                const exists = ports.some((p) => p.port === preset.port)
+                return (
+                  <button
+                    key={preset.port}
+                    onClick={() => togglePreset(preset)}
+                    title={`${preset.description} — ${preset.port}/${preset.protocol.toUpperCase()}`}
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border font-mono transition-all
+                      ${exists
+                        ? 'border-accent-green/40 text-accent-green bg-accent-green/10 hover:bg-accent-green/5 hover:border-accent-red/40 hover:text-accent-red'
+                        : 'border-bg-border text-slate-400 hover:border-accent-orange/40 hover:text-accent-orange hover:bg-accent-orange/5'
+                      }`}
+                  >
+                    {exists && <X size={10} />}
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Ajout manuel */}
+          <div className="card">
+            <h2 className="font-bold text-white text-sm mb-4">Ajouter un port</h2>
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="label">Port</label>
+                  <input
+                    className="input-field"
+                    placeholder="ex: 8080"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={newPort}
+                    onChange={(e) => setNewPort(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addPort()}
+                  />
+                </div>
+                <div className="w-28">
+                  <label className="label">Protocole</label>
+                  <select
+                    className="input-field"
+                    value={newProto}
+                    onChange={(e) => setNewProto(e.target.value as Protocol)}
+                  >
+                    <option value="tcp">TCP</option>
+                    <option value="udp">UDP</option>
+                    <option value="tcp+udp">TCP+UDP</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="label">Label (optionnel)</label>
+                <input
+                  className="input-field"
+                  placeholder="ex: Mon service"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addPort()}
+                />
+              </div>
+              <button onClick={addPort} className="btn-primary w-full flex items-center justify-center gap-2">
+                <Plus size={14} />
+                Ajouter le port
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: list + commands */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Port list */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-white text-sm">
+                Ports configurés
+                <span className="ml-2 text-xs font-mono text-slate-500 bg-bg-elevated px-1.5 py-0.5 rounded">
+                  {ports.length}
+                </span>
+              </h2>
+              {ports.length > 0 && (
+                <button
+                  onClick={() => { setPorts([]); addToast('Liste vidée') }}
+                  className="text-xs text-slate-500 hover:text-accent-red transition-colors"
+                >
+                  Tout supprimer
+                </button>
+              )}
+            </div>
+
+            {ports.length === 0 ? (
+              <div className="text-center py-10">
+                <Layers size={28} className="text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 text-sm">Aucun port configuré</p>
+                <p className="text-slate-600 text-xs mt-1">Ajoutez un preset ou saisissez manuellement</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {ports.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-bg-border/80 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm text-white font-semibold w-12 text-right">
+                        {entry.port}
+                      </span>
+                      <Badge variant={protoColors[entry.protocol]}>
+                        {entry.protocol.toUpperCase()}
+                      </Badge>
+                      <span className="text-slate-400 text-sm">{entry.label}</span>
+                    </div>
+                    <button
+                      onClick={() => removePort(entry.id)}
+                      className="text-slate-600 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Generated commands */}
+          {ports.length > 0 && (
+            <div className="space-y-4">
+              {/* Règles individuelles */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Terminal size={15} className="text-accent-green" />
+                  <h3 className="font-bold text-white text-sm">Règles iptables individuelles</h3>
+                </div>
+                <CodeBlock
+                  code={iptablesRules.join('\n')}
+                  filename="iptables — VPS"
+                  language="bash"
+                  onCopy={() => addToast('Règles copiées !')}
+                  maxHeight="250px"
+                />
+              </div>
+
+              {/* Bloc complet */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Terminal size={15} className="text-accent-cyan" />
+                  <h3 className="font-bold text-white text-sm">Bloc complet à copier-coller</h3>
+                </div>
+                <CodeBlock
+                  code={fullBlock}
+                  filename="iptables — script complet"
+                  language="bash"
+                  onCopy={() => addToast('Bloc copié !')}
+                  maxHeight="200px"
+                />
+              </div>
+
+              {/* Vérification */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Terminal size={15} className="text-accent-orange" />
+                  <h3 className="font-bold text-white text-sm">Commandes de vérification</h3>
+                </div>
+                <CodeBlock
+                  code={verifyCommands.join('\n')}
+                  filename="bash — vérification"
+                  language="bash"
+                  onCopy={() => addToast('Commandes copiées !')}
+                  maxHeight="200px"
+                />
+              </div>
+
+              <NoteBox type="info">
+                Ces commandes sont à exécuter sur le VPS. Remplacez <code className="font-mono text-xs">eth0</code> par le nom de votre interface réseau principale si nécessaire.
+              </NoteBox>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
