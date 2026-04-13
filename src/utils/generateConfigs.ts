@@ -201,6 +201,13 @@ WGEOF
 chmod 600 /etc/wireguard/wg0.conf
 ok "wg0.conf écrit dans /etc/wireguard/wg0.conf"
 
+# Avertissement si les clés sont encore des placeholders
+if grep -q '<SERVER_PRIVATE_KEY>\\|<CLIENT_PUBLIC_KEY>' /etc/wireguard/wg0.conf; then
+  warn "ATTENTION : wg0.conf contient des clés placeholder !"
+  warn "Éditez /etc/wireguard/wg0.conf avec les vraies clés avant de démarrer WireGuard."
+  warn "Générez des clés avec :  wg genkey | tee /tmp/priv | wg pubkey > /tmp/pub"
+fi
+
 # ─── Étape 3 : Forwarding IP ──────────────────────────────────────────────────
 step "3/5  Activation du forwarding IP"
 
@@ -245,15 +252,25 @@ step "5/5  Démarrage du service WireGuard"
 
 if command -v systemctl &>/dev/null; then
   systemctl enable wg-quick@wg0
-  systemctl restart wg-quick@wg0
-  sleep 1
-  systemctl is-active --quiet wg-quick@wg0 && ok "Service wg-quick@wg0 démarré (systemd)" || die "Le service WireGuard n'a pas démarré. Logs : journalctl -u wg-quick@wg0 -n 30"
+  if systemctl restart wg-quick@wg0; then
+    sleep 1
+    systemctl is-active --quiet wg-quick@wg0 \
+      && ok "Service wg-quick@wg0 démarré (systemd)" \
+      || die "WireGuard instable. Logs : journalctl -u wg-quick@wg0 -n 30"
+  else
+    echo "" >&2
+    warn "Derniers logs WireGuard :"
+    journalctl -u wg-quick@wg0 -n 20 --no-pager 2>/dev/null || true
+    echo "" >&2
+    die "Le service WireGuard n'a pas démarré.\\n  Cause probable : clés invalides dans /etc/wireguard/wg0.conf\\n  Vérifiez : cat /etc/wireguard/wg0.conf"
+  fi
 elif command -v rc-update &>/dev/null; then
   rc-update add wg-quick default 2>/dev/null || true
-  wg-quick up wg0 2>/dev/null || wg-quick down wg0 2>/dev/null && wg-quick up wg0
+  wg-quick down wg0 2>/dev/null || true
+  wg-quick up wg0 || die "WireGuard n'a pas démarré. Vérifiez : wg show"
   ok "Tunnel WireGuard démarré (OpenRC)"
 else
-  wg-quick up /etc/wireguard/wg0.conf
+  wg-quick up /etc/wireguard/wg0.conf || die "WireGuard n'a pas démarré. Vérifiez : cat /etc/wireguard/wg0.conf"
   ok "Tunnel WireGuard démarré"
 fi
 
