@@ -1,13 +1,15 @@
 import type { ProjectConfig, GeneratedFiles } from '../types'
 
-// ─── Références bash (évite l'interprétation par TypeScript) ─────────────────
-// Usage dans les template literals : ${B.CYAN} → génère ${B.CYAN} dans le script
-const B = {
-  RED:    '${B.RED}',    GREEN:  '${B.GREEN}',  YELLOW: '${B.YELLOW}',
-  CYAN:   '${B.CYAN}',  BOLD:   '${B.BOLD}',   NC:     '${B.NC}',
-  IFACE:  '${B.IFACE}', PKG:    '${B.PKG}',
-  SVC:    '${B.SVC}',   WGDIR:  '${B.WGDIR}',
-}
+// Bash ANSI color variable references used in generated shell scripts.
+// Stored as regular JS constants (single-quoted strings) so TypeScript does NOT
+// interpret the ${VAR} syntax as template expressions when they appear in backtick
+// template literals via ${_C}, ${_N}, etc.
+const _R = '${RED}'
+const _G = '${GREEN}'
+const _Y = '${YELLOW}'
+const _C = '${CYAN}'
+const _B = '${BOLD}'
+const _N = '${NC}'
 
 function placeholder(val: string, fallback: string): string {
   return val.trim() || `<${fallback}>`
@@ -114,26 +116,26 @@ set -euo pipefail
 # ─── Couleurs ──────────────────────────────────────────────────────────────────
 RED='\\033[0;31m'; GREEN='\\033[0;32m'; YELLOW='\\033[1;33m'
 CYAN='\\033[0;36m'; BOLD='\\033[1m'; NC='\\033[0m'
-log()   { echo -e "${B.CYAN}[INFO]${B.NC}  $1"; }
-ok()    { echo -e "${B.GREEN}[ OK ]${B.NC}  $1"; }
-warn()  { echo -e "${B.YELLOW}[WARN]${B.NC}  $1"; }
-die()   { echo -e "${B.RED}[ERR ]${B.NC}  $1" >&2; exit 1; }
-step()  { echo -e "\\n${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; echo -e "${B.BOLD}${B.CYAN}  $1${B.NC}"; echo -e "${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; }
+log()   { echo -e "${_C}[INFO]${_N}  $1"; }
+ok()    { echo -e "${_G}[ OK ]${_N}  $1"; }
+warn()  { echo -e "${_Y}[WARN]${_N}  $1"; }
+die()   { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
+step()  { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
 # ─── Bannière ──────────────────────────────────────────────────────────────────
 clear
-echo -e "${B.BOLD}${B.CYAN}"
+echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
   ║        GatewayManager — Setup VPS            ║
   ║   Configuration du serveur relais WireGuard  ║
   ╚══════════════════════════════════════════════╝
 BANNER
-echo -e "${B.NC}"
-echo -e "  Projet  : ${B.BOLD}${projectName}${B.NC}"
-echo -e "  IP VPS  : ${B.BOLD}${vpsIp}${B.NC}"
-echo -e "  Client  : ${B.BOLD}${localIp}${B.NC}"
-echo -e "  Port WG : ${B.BOLD}${wgPort}/UDP${B.NC}"
+echo -e "${_N}"
+echo -e "  Projet  : ${_B}${projectName}${_N}"
+echo -e "  IP VPS  : ${_B}${vpsIp}${_N}"
+echo -e "  Client  : ${_B}${localIp}${_N}"
+echo -e "  Port WG : ${_B}${wgPort}/UDP${_N}"
 echo ""
 
 # ─── Vérifications préalables ──────────────────────────────────────────────────
@@ -257,23 +259,23 @@ fi
 
 # ─── Résumé final ─────────────────────────────────────────────────────────────
 echo ""
-echo -e "${B.BOLD}${B.GREEN}"
+echo -e "${_B}${_G}"
 cat << 'DONE'
   ╔══════════════════════════════════════════════╗
   ║    ✓  Setup VPS terminé avec succès !        ║
   ╚══════════════════════════════════════════════╝
 DONE
-echo -e "${B.NC}"
-echo -e "  IP VPS      : ${B.BOLD}${vpsIp}${B.NC}"
-echo -e "  IP client   : ${B.BOLD}${localIp}${B.NC}"
-echo -e "  Port WG     : ${B.BOLD}${wgPort}/UDP${B.NC}"
-echo -e "  Interface   : ${B.BOLD}$IFACE${B.NC}"
+echo -e "${_N}"
+echo -e "  IP VPS      : ${_B}${vpsIp}${_N}"
+echo -e "  IP client   : ${_B}${localIp}${_N}"
+echo -e "  Port WG     : ${_B}${wgPort}/UDP${_N}"
+echo -e "  Interface   : ${_B}$IFACE${_N}"
 echo ""
-echo -e "  ${B.YELLOW}Prochaine étape :${B.NC}"
-echo -e "  Exécutez ${B.BOLD}setup-client.sh${B.NC} sur votre PC local (serveur de jeux / RDP...)"
+echo -e "  ${_Y}Prochaine étape :${_N}"
+echo -e "  Exécutez ${_B}setup-client.sh${_N} sur votre PC local (serveur de jeux / RDP...)"
 echo ""
-echo -e "  ${B.CYAN}Vérification WireGuard :${B.NC}  wg show"
-echo -e "  ${B.CYAN}Vérification iptables  :${B.NC}  iptables -t nat -L PREROUTING -n -v"
+echo -e "  ${_C}Vérification WireGuard :${_N}  wg show"
+echo -e "  ${_C}Vérification iptables  :${_N}  iptables -t nat -L PREROUTING -n -v"
 echo ""
 `
 }
@@ -337,25 +339,25 @@ set -euo pipefail
 # ─── Couleurs ──────────────────────────────────────────────────────────────────
 RED='\\033[0;31m'; GREEN='\\033[0;32m'; YELLOW='\\033[1;33m'
 CYAN='\\033[0;36m'; BOLD='\\033[1m'; NC='\\033[0m'
-log()  { echo -e "${B.CYAN}[INFO]${B.NC}  $1"; }
-ok()   { echo -e "${B.GREEN}[ OK ]${B.NC}  $1"; }
-warn() { echo -e "${B.YELLOW}[WARN]${B.NC}  $1"; }
-die()  { echo -e "${B.RED}[ERR ]${B.NC}  $1" >&2; exit 1; }
-step() { echo -e "\\n${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; echo -e "${B.BOLD}${B.CYAN}  $1${B.NC}"; echo -e "${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; }
+log()  { echo -e "${_C}[INFO]${_N}  $1"; }
+ok()   { echo -e "${_G}[ OK ]${_N}  $1"; }
+warn() { echo -e "${_Y}[WARN]${_N}  $1"; }
+die()  { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
+step() { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
 # ─── Bannière ──────────────────────────────────────────────────────────────────
 clear
-echo -e "${B.BOLD}${B.CYAN}"
+echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
   ║      GatewayManager — Setup PC Client        ║
   ║   Configuration du client WireGuard local    ║
   ╚══════════════════════════════════════════════╝
 BANNER
-echo -e "${B.NC}"
-echo -e "  Projet     : ${B.BOLD}${projectName}${B.NC}"
-echo -e "  VPS cible  : ${B.BOLD}${vpsIp}:${wgPort}${B.NC}"
-echo -e "  IP tunnel  : ${B.BOLD}${localIp}${B.NC}"
+echo -e "${_N}"
+echo -e "  Projet     : ${_B}${projectName}${_N}"
+echo -e "  VPS cible  : ${_B}${vpsIp}:${wgPort}${_N}"
+echo -e "  IP tunnel  : ${_B}${localIp}${_N}"
 echo ""
 
 # ─── Vérifications préalables ──────────────────────────────────────────────────
@@ -398,18 +400,18 @@ ${checkCmd}
 
 # ─── Résumé final ─────────────────────────────────────────────────────────────
 echo ""
-echo -e "${B.BOLD}${B.GREEN}"
+echo -e "${_B}${_G}"
 cat << 'DONE'
   ╔══════════════════════════════════════════════╗
   ║  ✓  Setup PC Client terminé avec succès !   ║
   ╚══════════════════════════════════════════════╝
 DONE
-echo -e "${B.NC}"
-echo -e "  VPS cible  : ${B.BOLD}${vpsIp}:${wgPort}${B.NC}"
-echo -e "  IP tunnel  : ${B.BOLD}${localIp}${B.NC}"
+echo -e "${_N}"
+echo -e "  VPS cible  : ${_B}${vpsIp}:${wgPort}${_N}"
+echo -e "  IP tunnel  : ${_B}${localIp}${_N}"
 echo ""
-echo -e "  ${B.CYAN}Vérification tunnel  :${B.NC}  wg show"
-echo -e "  ${B.CYAN}Ping vers le VPS     :${B.NC}  ping -c 3 10.10.0.1"
+echo -e "  ${_C}Vérification tunnel  :${_N}  wg show"
+echo -e "  ${_C}Ping vers le VPS     :${_N}  ping -c 3 10.10.0.1"
 echo ""
 `
 }
@@ -435,22 +437,22 @@ set -euo pipefail
 
 RED='\\033[0;31m'; GREEN='\\033[0;32m'; YELLOW='\\033[1;33m'
 CYAN='\\033[0;36m'; BOLD='\\033[1m'; NC='\\033[0m'
-log()  { echo -e "${B.CYAN}[INFO]${B.NC}  $1"; }
-ok()   { echo -e "${B.GREEN}[ OK ]${B.NC}  $1"; }
-warn() { echo -e "${B.YELLOW}[WARN]${B.NC}  $1"; }
-die()  { echo -e "${B.RED}[ERR ]${B.NC}  $1" >&2; exit 1; }
-step() { echo -e "\\n${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; echo -e "${B.BOLD}${B.CYAN}  $1${B.NC}"; echo -e "${B.BOLD}${B.CYAN}──────────────────────────────────────────${B.NC}"; }
+log()  { echo -e "${_C}[INFO]${_N}  $1"; }
+ok()   { echo -e "${_G}[ OK ]${_N}  $1"; }
+warn() { echo -e "${_Y}[WARN]${_N}  $1"; }
+die()  { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
+step() { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
 clear
-echo -e "${B.BOLD}${B.CYAN}"
+echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
   ║    GatewayManager — Setup PC Client macOS    ║
   ╚══════════════════════════════════════════════╝
 BANNER
-echo -e "${B.NC}"
-echo -e "  VPS cible  : ${B.BOLD}${vpsIp}:${wgPort}${B.NC}"
-echo -e "  IP tunnel  : ${B.BOLD}${localIp}${B.NC}"
+echo -e "${_N}"
+echo -e "  VPS cible  : ${_B}${vpsIp}:${wgPort}${_N}"
+echo -e "  IP tunnel  : ${_B}${localIp}${_N}"
 echo ""
 
 step "1/3  Vérification Homebrew + Installation WireGuard"
@@ -487,9 +489,9 @@ wg-quick up   "$WG_DIR/wg0.conf"
 ok "Tunnel WireGuard démarré"
 
 echo ""
-echo -e "${B.BOLD}${B.GREEN}  ✓  Setup macOS terminé !${B.NC}"
-echo -e "  Ping VPS : ${B.CYAN}ping -c 3 10.10.0.1${B.NC}"
-echo -e "  Statut   : ${B.CYAN}sudo wg show${B.NC}"
+echo -e "${_B}${_G}  ✓  Setup macOS terminé !${_N}"
+echo -e "  Ping VPS : ${_C}ping -c 3 10.10.0.1${_N}"
+echo -e "  Statut   : ${_C}sudo wg show${_N}"
 echo ""
 `
 }
