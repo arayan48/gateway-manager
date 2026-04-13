@@ -60,7 +60,7 @@ export function generateWg0Server(cfg: ProjectConfig): string {
   const privKey  = placeholder(cfg.keys.serverPrivateKey, 'SERVER_PRIVATE_KEY')
   const pubClient = placeholder(cfg.keys.clientPublicKey,  'CLIENT_PUBLIC_KEY')
   const wgPort   = sanitizePort(cfg.wireguardPort || 51820)
-  const localIp  = placeholder(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp  = placeholder(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
 
   return `[Interface]
 PrivateKey = ${privKey}
@@ -78,7 +78,7 @@ export function generateWg0Client(cfg: ProjectConfig): string {
   const pubServer = placeholder(cfg.keys.serverPublicKey,  'SERVER_PUBLIC_KEY')
   const vpsIp     = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
   const wgPort    = sanitizePort(cfg.wireguardPort || 51820)
-  const localIp   = placeholder(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp   = placeholder(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
 
   return `[Interface]
 PrivateKey = ${privKey}
@@ -96,7 +96,7 @@ PersistentKeepalive = 25
 
 export function generateSetupVps(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
-  const localIp    = sanitizeIp(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const wgConf     = generateWg0Server(cfg)
@@ -329,7 +329,7 @@ const osInstallInfo: Record<string, { label: string; installCmd: string; iptable
 
 export function generateSetupClientLinux(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
-  const localIp    = sanitizeIp(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const wgConf     = generateWg0Client(cfg)
@@ -437,7 +437,7 @@ echo ""
 
 export function generateSetupClientMacos(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
-  const localIp    = sanitizeIp(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const wgConf     = generateWg0Client(cfg)
@@ -517,7 +517,7 @@ echo ""
 
 export function generateSetupClientWindows(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
-  const localIp    = sanitizeIp(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const wgConf     = generateWg0Client(cfg)
@@ -622,7 +622,7 @@ Write-Host ""
 
 export function generateReadme(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
-  const localIp    = sanitizeIp(cfg.localWireguardIp, 'LOCAL_WG_IP')
+  const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const osLabel: Record<string, string> = {
     windows: 'Windows', 'linux-debian': 'Debian 12', 'linux-ubuntu': 'Ubuntu 22.04/24.04',
