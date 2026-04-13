@@ -15,11 +15,16 @@ function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-function genFakeKey(): string {
-  // Génère 32 octets aléatoires puis les encode en base64 — produit toujours un padding correct
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  return btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''))
+function toBase64(buf: ArrayBuffer): string {
+  return btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(''))
+}
+
+/** Génère une vraie paire de clés Curve25519 (X25519) via Web Crypto — compatible WireGuard */
+async function generateWgKeypair(): Promise<{ privateKey: string; publicKey: string }> {
+  const kp = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveKey', 'deriveBits'])
+  const priv = await crypto.subtle.exportKey('raw', kp.privateKey)
+  const pub  = await crypto.subtle.exportKey('raw', kp.publicKey)
+  return { privateKey: toBase64(priv), publicKey: toBase64(pub) }
 }
 
 const steps = [
@@ -175,12 +180,14 @@ function KeyField({
 function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardKeys) => void }) {
   const [showPrivate, setShowPrivate] = useState(false)
 
-  const generateTestKeys = () => {
+  const generateTestKeys = async () => {
+    const server = await generateWgKeypair()
+    const client = await generateWgKeypair()
     setKeys({
-      serverPrivateKey: genFakeKey(),
-      serverPublicKey: genFakeKey(),
-      clientPrivateKey: genFakeKey(),
-      clientPublicKey: genFakeKey(),
+      serverPrivateKey: server.privateKey,
+      serverPublicKey:  server.publicKey,
+      clientPrivateKey: client.privateKey,
+      clientPublicKey:  client.publicKey,
     })
   }
 
@@ -199,8 +206,8 @@ function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardK
         </button>
       </div>
 
-      <NoteBox type="warn" title="Important">
-        Générez de vraies clés avec <code className="font-mono text-xs">wg genkey</code> sur votre machine. Les clés "de test" ne sont que des placeholders pour prévisualiser le rendu des fichiers.
+      <NoteBox type="info" title="Génération des clés">
+        Le bouton ci-dessus génère de vraies paires de clés Curve25519 utilisables directement. Si vous préférez générer les clés manuellement sur votre machine : <code className="font-mono text-xs">wg genkey | tee priv.key | wg pubkey &gt; pub.key</code>
       </NoteBox>
 
       <div className="border border-bg-border rounded-lg p-4 space-y-4">
