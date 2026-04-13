@@ -50,16 +50,7 @@ export function CodeBlock({ code, filename, language = 'bash', onCopy, onDownloa
       setTimeout(() => setCopied(false), 2000)
       onCopy?.()
     } catch {
-      // fallback
-      const el = document.createElement('textarea')
-      el.value = code
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-      onCopy?.()
+      // Clipboard API unavailable (non-HTTPS or denied permission) — silent fail
     }
   }
 

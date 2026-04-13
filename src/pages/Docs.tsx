@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Monitor, Terminal, Server, Apple, ChevronRight, CheckCircle, ExternalLink } from 'lucide-react'
 import { CodeBlock } from '../components/ui/CodeBlock'
 import { NoteBox } from '../components/ui/NoteBox'
@@ -200,7 +201,7 @@ Remove-Item $installer -Force`}
           <NoteBox type="info" title="Et le VPS ?">
             Le VPS doit lui aussi être configuré — il tourne toujours sous <strong>Linux</strong>.
             Utilisez le script <code className="font-mono text-xs text-accent-cyan">setup-vps.sh</code> généré par le{' '}
-            <a href="/config" className="text-accent-cyan underline">Générateur de config</a>, ou suivez la documentation
+            <Link to="/config" className="text-accent-cyan underline">Générateur de config</Link>, ou suivez la documentation
             Linux (onglet Debian/Ubuntu) pour la partie VPS, sections Installation et Configuration WireGuard.
           </NoteBox>
         </div>
@@ -777,7 +778,7 @@ wg --version`}
           <NoteBox type="info" title="Et le VPS ?">
             Le VPS doit lui aussi être configuré — il tourne toujours sous <strong>Linux</strong>.
             Utilisez le script <code className="font-mono text-xs text-accent-cyan">setup-vps.sh</code> généré par le{' '}
-            <a href="/config" className="text-accent-cyan underline">Générateur de config</a>, ou suivez la documentation
+            <Link to="/config" className="text-accent-cyan underline">Générateur de config</Link>, ou suivez la documentation
             Linux (onglet Debian/Ubuntu) pour la partie VPS.
           </NoteBox>
         </div>

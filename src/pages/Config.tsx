@@ -39,6 +39,8 @@ const osOptions: { value: TargetOS; label: string; desc: string; tag: string }[]
   { value: 'macos',         label: 'macOS',                  tag: 'brew',  desc: 'macOS 12 Monterey et supérieur — via Homebrew' },
 ]
 
+const isValidIp = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
+
 // ─── Step 1 ─────────────────────────────────────────────────────
 function Step1({
   projectName, setProjectName,
@@ -53,6 +55,9 @@ function Step1({
   wgPort: number; setWgPort: (v: number) => void
   targetOS: TargetOS; setTargetOS: (v: TargetOS) => void
 }) {
+  const vpsIpInvalid  = vpsIp.trim()     !== '' && !isValidIp(vpsIp)
+  const localIpInvalid = localWgIp.trim() !== '' && !isValidIp(localWgIp)
+
   return (
     <div className="space-y-5">
       <div>
@@ -62,11 +67,23 @@ function Step1({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">IP publique du VPS <span className="text-accent-red">*</span></label>
-          <input className="input-field" placeholder="ex: 185.142.21.45" value={vpsIp} onChange={(e) => setVpsIp(e.target.value)} />
+          <input
+            className={`input-field ${vpsIpInvalid ? 'border-red-500 focus:border-red-400' : ''}`}
+            placeholder="ex: 185.142.21.45"
+            value={vpsIp}
+            onChange={(e) => setVpsIp(e.target.value)}
+          />
+          {vpsIpInvalid && <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 185.142.21.45</p>}
         </div>
         <div>
           <label className="label">IP locale WireGuard (client)</label>
-          <input className="input-field" placeholder="10.10.0.2" value={localWgIp} onChange={(e) => setLocalWgIp(e.target.value)} />
+          <input
+            className={`input-field ${localIpInvalid ? 'border-red-500 focus:border-red-400' : ''}`}
+            placeholder="10.10.0.2"
+            value={localWgIp}
+            onChange={(e) => setLocalWgIp(e.target.value)}
+          />
+          {localIpInvalid && <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 10.10.0.2</p>}
         </div>
       </div>
       <div>
@@ -81,8 +98,11 @@ function Step1({
         <p className="text-xs text-slate-600 mt-1 font-mono">Défaut : 51820/UDP — doit être ouvert sur le VPS</p>
       </div>
       <div>
-        <label className="label">OS du serveur distant (client WireGuard) <span className="text-accent-red">*</span></label>
-        <p className="text-xs text-slate-600 mb-2 font-mono">Détermine le script d'installation généré</p>
+        <label className="label">OS de votre PC local <span className="text-accent-red">*</span></label>
+        <p className="text-xs text-slate-600 mb-2 font-mono">
+          Votre PC local = la machine derrière le NAT qui héberge vos services (jeux, RDP…).
+          Ce choix détermine le script <code className="text-accent-orange">setup-client.sh / .ps1</code> généré.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
           {osOptions.map((os) => (
             <button
@@ -294,6 +314,15 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
   )
 }
 
+const fileMeta: Record<string, { machine: string; color: string; hint: string }> = {
+  'setup-vps.sh':     { machine: '🖥️ VPS',      color: 'text-accent-cyan',   hint: 'Exécuter sur le VPS (SSH)' },
+  'setup-client.sh':  { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'Exécuter sur votre PC local' },
+  'setup-client.ps1': { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'PowerShell Admin sur votre PC' },
+  'wg0-server.conf':  { machine: '🖥️ VPS',      color: 'text-accent-cyan',   hint: 'Config WireGuard du VPS' },
+  'wg0-client.conf':  { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'Config WireGuard du PC local' },
+  'README.txt':       { machine: '📄 Lisez-moi', color: 'text-slate-400',     hint: 'Instructions d\'installation' },
+}
+
 // ─── Step 4 ─────────────────────────────────────────────────────
 function Step4({
   config,
@@ -306,12 +335,9 @@ function Step4({
   const fileEntries = Object.entries(files) as [string, string][]
 
   const langMap: Record<string, string> = {
-    'wg0-server.conf': 'ini',
-    'wg0-client.conf': 'ini',
-    'setup-vps.sh': 'bash',
-    'setup-client.sh': 'bash',
-    'setup-client.ps1': 'powershell',
-    'README.txt': 'bash',
+    'wg0-server.conf': 'ini', 'wg0-client.conf': 'ini',
+    'setup-vps.sh': 'bash', 'setup-client.sh': 'bash',
+    'setup-client.ps1': 'powershell', 'README.txt': 'bash',
   }
 
   const handleZip = async () => {
@@ -325,6 +351,7 @@ function Step4({
 
   return (
     <div className="space-y-6">
+      {/* Header + bouton ZIP */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div>
           <h3 className="font-bold text-white">Fichiers générés</h3>
@@ -341,12 +368,49 @@ function Step4({
         </button>
       </div>
 
+      {/* Guide rapide */}
+      <div className="rounded-xl border border-bg-border bg-bg-surface p-4 space-y-3">
+        <p className="text-xs font-mono text-slate-400 uppercase tracking-widest">Ordre d'installation</p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 rounded-lg border border-accent-cyan/30 bg-accent-cyan/5 p-3">
+            <p className="text-accent-cyan font-bold text-sm mb-1">① Sur le VPS</p>
+            <code className="text-xs text-slate-300 font-mono block">scp setup-vps.sh root@{config.vpsPublicIp || '<IP_VPS>'}:/root/</code>
+            <code className="text-xs text-slate-300 font-mono block">ssh root@{config.vpsPublicIp || '<IP_VPS>'}</code>
+            <code className="text-xs text-slate-300 font-mono block">sudo bash /root/setup-vps.sh</code>
+          </div>
+          <div className="hidden sm:flex items-center text-slate-600 text-xl">→</div>
+          <div className="flex-1 rounded-lg border border-accent-orange/30 bg-accent-orange/5 p-3">
+            <p className="text-accent-orange font-bold text-sm mb-1">② Sur votre PC local</p>
+            {config.targetOS === 'windows' ? (
+              <>
+                <code className="text-xs text-slate-300 font-mono block">Copier setup-client.ps1 sur le PC</code>
+                <code className="text-xs text-slate-300 font-mono block">PowerShell Admin → .\setup-client.ps1</code>
+              </>
+            ) : (
+              <>
+                <code className="text-xs text-slate-300 font-mono block">scp setup-client.sh user@&lt;IP_PC&gt;:/tmp/</code>
+                <code className="text-xs text-slate-300 font-mono block">sudo bash /tmp/setup-client.sh</code>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Liste des fichiers */}
       <div className="space-y-4">
-        {fileEntries.map(([filename, content]) => (
-          <div key={filename}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-mono text-slate-300">{filename}</span>
-              <div className="flex gap-2">
+        {fileEntries.map(([filename, content]) => {
+          const meta = fileMeta[filename]
+          return (
+            <div key={filename}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono text-slate-300">{filename}</span>
+                  {meta && (
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border border-current/30 bg-current/10 ${meta.color}`}>
+                      {meta.machine}
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={async () => {
                     await exportSingleFile(filename, content)
@@ -358,16 +422,19 @@ function Step4({
                   Télécharger
                 </button>
               </div>
+              {meta?.hint && (
+                <p className="text-xs text-slate-600 font-mono mb-2">→ {meta.hint}</p>
+              )}
+              <CodeBlock
+                code={content}
+                filename={filename}
+                language={langMap[filename] || 'bash'}
+                onCopy={() => addToast(`${filename} copié !`)}
+                maxHeight="300px"
+              />
             </div>
-            <CodeBlock
-              code={content}
-              filename={filename}
-              language={langMap[filename] || 'bash'}
-              onCopy={() => addToast(`${filename} copié !`)}
-              maxHeight="300px"
-            />
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

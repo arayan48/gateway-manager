@@ -3,7 +3,11 @@ import type { GeneratedFiles } from '../types'
 
 export async function exportToZip(files: GeneratedFiles, projectName: string): Promise<void> {
   const zip = new JSZip()
-  const folderName = (projectName || 'gateway-manager').replace(/\s+/g, '-').toLowerCase()
+  const folderName = (projectName || 'gateway-manager')
+    .replace(/[^a-zA-Z0-9\s_-]/g, '')  // strip path traversal and special chars
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+    .slice(0, 64) || 'gateway-manager'
   const folder = zip.folder(folderName)!
 
   for (const [filename, content] of Object.entries(files)) {

@@ -14,6 +14,8 @@ function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
+const isValidIp = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
+
 export function Ports() {
   const { toasts, addToast, removeToast } = useToast()
   const [ports, setPorts] = useLocalStorage<PortEntry[]>('gm-ports', [])
@@ -96,20 +98,26 @@ export function Ports() {
               <div>
                 <label className="label">IP publique du VPS</label>
                 <input
-                  className="input-field"
+                  className={`input-field ${vpsIp.trim() !== '' && !isValidIp(vpsIp) ? 'border-red-500 focus:border-red-400' : ''}`}
                   placeholder="ex: 185.142.21.45"
                   value={vpsIp}
                   onChange={(e) => setVpsIp(e.target.value)}
                 />
+                {vpsIp.trim() !== '' && !isValidIp(vpsIp) && (
+                  <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 185.142.21.45</p>
+                )}
               </div>
               <div>
                 <label className="label">IP locale WireGuard (client)</label>
                 <input
-                  className="input-field"
+                  className={`input-field ${localWgIp.trim() !== '' && !isValidIp(localWgIp) ? 'border-red-500 focus:border-red-400' : ''}`}
                   placeholder="ex: 10.10.0.2"
                   value={localWgIp}
                   onChange={(e) => setLocalWgIp(e.target.value)}
                 />
+                {localWgIp.trim() !== '' && !isValidIp(localWgIp) && (
+                  <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 10.10.0.2</p>
+                )}
               </div>
             </div>
           </div>

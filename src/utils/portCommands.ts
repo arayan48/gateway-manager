@@ -1,5 +1,10 @@
 import type { PortEntry } from '../types'
 
+/** Strip characters that could break shell comments or inject commands */
+function sanitizeLabel(label: string): string {
+  return label.replace(/[\r\n`$\\;|&<>]/g, '').slice(0, 60)
+}
+
 export function generateIptablesRules(
   ports: PortEntry[],
   _vpsIp: string,
@@ -13,7 +18,7 @@ export function generateIptablesRules(
       entry.protocol === 'tcp+udp' ? ['tcp', 'udp'] : [entry.protocol]
     for (const proto of protos) {
       rules.push(
-        `iptables -t nat -A PREROUTING -i eth0 -p ${proto} --dport ${entry.port} -j DNAT --to-destination ${local}:${entry.port}  # ${entry.label}`
+        `iptables -t nat -A PREROUTING -i eth0 -p ${proto} --dport ${entry.port} -j DNAT --to-destination ${local}:${entry.port}  # ${sanitizeLabel(entry.label)}`
       )
       rules.push(
         `iptables -A FORWARD -p ${proto} -d ${local} --dport ${entry.port} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`
@@ -44,7 +49,7 @@ export function generateVerificationCommands(
 
   for (const entry of ports) {
     const proto = entry.protocol === 'tcp+udp' ? 'tcp' : entry.protocol
-    lines.push(`nc -zv ${ip} ${entry.port}  # ${entry.label} (${proto})`)
+    lines.push(`nc -zv ${ip} ${entry.port}  # ${sanitizeLabel(entry.label)} (${proto})`)
   }
 
   return lines
