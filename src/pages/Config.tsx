@@ -39,7 +39,8 @@ const osOptions: { value: TargetOS; label: string; desc: string; tag: string }[]
   { value: 'macos',         label: 'macOS',                  tag: 'brew',  desc: 'macOS 12 Monterey et supérieur — via Homebrew' },
 ]
 
-const isValidIp = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
+const isValidIp  = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
+const isValidWgKey = (v: string) => /^[A-Za-z0-9+/]{43}=$/.test(v.trim())
 
 // ─── Step 1 ─────────────────────────────────────────────────────
 function Step1({
@@ -140,12 +141,13 @@ function KeyField({
   showPrivate: boolean
   onTogglePrivate: () => void
 }) {
+  const invalid = value.trim() !== '' && !isValidWgKey(value)
   return (
     <div>
       <label className="label">{label}</label>
       <div className="relative">
         <input
-          className="input-field pr-10"
+          className={`input-field pr-10 ${invalid ? 'border-red-500 focus:border-red-400' : ''}`}
           type={isPrivate && !showPrivate ? 'password' : 'text'}
           placeholder="Base64 44 caractères"
           value={value}
@@ -161,6 +163,11 @@ function KeyField({
           </button>
         )}
       </div>
+      {invalid && (
+        <p className="text-xs text-red-400 mt-1 font-mono">
+          Clé invalide — 44 caractères base64 requis. Générez avec : <span className="text-red-300">wg genkey</span>
+        </p>
+      )}
     </div>
   )
 }

@@ -8,7 +8,18 @@ import { Badge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import type { PortEntry, Protocol } from '../types'
 import { PORT_PRESETS } from '../types'
-import { generateIptablesRules, generateVerificationCommands, generateFullBlock } from '../utils/portCommands'
+import type { PortOS } from '../utils/portCommands'
+import {
+  generateIptablesRules,
+  generateVerificationCommands,
+  generateFullBlock,
+  generateLinuxClientRules,
+  generateLinuxClientVerification,
+  generateWindowsRules,
+  generateWindowsVerification,
+  generateMacOSRules,
+  generateMacOSVerification,
+} from '../utils/portCommands'
 
 function genId() {
   return Math.random().toString(36).slice(2, 9)
@@ -16,11 +27,38 @@ function genId() {
 
 const isValidIp = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
 
+const OS_OPTIONS: { value: PortOS; label: string; sublabel: string }[] = [
+  { value: 'linux-vps',    label: '🖥️  VPS Linux',       sublabel: 'iptables DNAT — redirection vers le PC local' },
+  { value: 'linux-client', label: '🐧  PC local Linux',   sublabel: 'iptables INPUT — ouvrir les ports en local' },
+  { value: 'windows',      label: '🪟  PC local Windows', sublabel: 'PowerShell — New-NetFirewallRule' },
+  { value: 'macos',        label: '🍎  PC local macOS',   sublabel: 'pfctl — /etc/pf.conf' },
+]
+
+const OS_NOTE: Record<PortOS, { type: 'info' | 'warn'; text: string }> = {
+  'linux-vps': {
+    type: 'info',
+    text: 'Ces commandes sont à exécuter sur le VPS. Remplacez eth0 par le nom de votre interface réseau principale si nécessaire (détectable avec : ip route get 8.8.8.8).',
+  },
+  'linux-client': {
+    type: 'info',
+    text: 'Ces commandes sont à exécuter sur votre PC local Linux. Le trafic autorisé provient uniquement de l\'interface WireGuard (wg0), donc depuis le tunnel sécurisé.',
+  },
+  'windows': {
+    type: 'info',
+    text: 'Ouvrez PowerShell en tant qu\'Administrateur avant d\'exécuter ces commandes. Les règles créées sont persistantes (survivent au redémarrage).',
+  },
+  'macos': {
+    type: 'warn',
+    text: 'pfctl est le pare-feu macOS. Si /etc/pf.conf n\'existe pas, créez-le. Les règles sont à ré-appliquer au démarrage (ajoutez un LaunchDaemon si nécessaire).',
+  },
+}
+
 export function Ports() {
   const { toasts, addToast, removeToast } = useToast()
   const [ports, setPorts] = useLocalStorage<PortEntry[]>('gm-ports', [])
   const [vpsIp, setVpsIp] = useLocalStorage('gm-vps-ip', '')
   const [localWgIp, setLocalWgIp] = useLocalStorage('gm-local-wg-ip', '10.10.0.2')
+  const [portOs, setPortOs] = useLocalStorage<PortOS>('gm-port-os', 'linux-vps')
 
   const [newPort, setNewPort] = useState('')
   const [newProto, setNewProto] = useState<Protocol>('tcp')
@@ -63,9 +101,63 @@ export function Ports() {
     }
   }
 
-  const iptablesRules = generateIptablesRules(ports, vpsIp, localWgIp)
-  const verifyCommands = generateVerificationCommands(ports, vpsIp)
-  const fullBlock = generateFullBlock(ports, vpsIp, localWgIp)
+  // Commandes générées selon l'OS sélectionné
+  const resolvedLocalIp = localWgIp || '10.10.0.2'
+
+  const { mainCode, mainTitle, mainFilename, fullCode, fullTitle, fullFilename, verifyCode, verifyFilename, verifyLang } = (() => {
+    switch (portOs) {
+      case 'linux-vps':
+        return {
+          mainCode:     generateIptablesRules(ports, vpsIp, resolvedLocalIp).join('\n'),
+          mainTitle:    'Règles iptables individuelles',
+          mainFilename: 'iptables — VPS',
+          fullCode:     generateFullBlock(ports, vpsIp, resolvedLocalIp),
+          fullTitle:    'Bloc complet à copier-coller',
+          fullFilename: 'iptables — script complet',
+          verifyCode:   generateVerificationCommands(ports, vpsIp).join('\n'),
+          verifyFilename: 'bash — vérification',
+          verifyLang:   'bash',
+        }
+      case 'linux-client':
+        return {
+          mainCode:     generateLinuxClientRules(ports).join('\n'),
+          mainTitle:    'Règles iptables (PC local Linux)',
+          mainFilename: 'iptables — PC local',
+          fullCode:     generateLinuxClientRules(ports).join('\n'),
+          fullTitle:    'Bloc complet à copier-coller',
+          fullFilename: 'iptables — PC local (complet)',
+          verifyCode:   generateLinuxClientVerification(ports, vpsIp).join('\n'),
+          verifyFilename: 'bash — vérification',
+          verifyLang:   'bash',
+        }
+      case 'windows':
+        return {
+          mainCode:     generateWindowsRules(ports).join('\n'),
+          mainTitle:    'Règles pare-feu Windows (PowerShell)',
+          mainFilename: 'PowerShell — New-NetFirewallRule',
+          fullCode:     generateWindowsRules(ports).join('\n'),
+          fullTitle:    'Bloc complet à copier-coller',
+          fullFilename: 'PowerShell — complet',
+          verifyCode:   generateWindowsVerification(ports, vpsIp).join('\n'),
+          verifyFilename: 'PowerShell — vérification',
+          verifyLang:   'powershell',
+        }
+      case 'macos':
+        return {
+          mainCode:     generateMacOSRules(ports).join('\n'),
+          mainTitle:    'Règles pfctl (macOS)',
+          mainFilename: 'pfctl — /etc/pf.conf',
+          fullCode:     generateMacOSRules(ports).join('\n'),
+          fullTitle:    'Bloc complet à copier-coller',
+          fullFilename: 'pfctl — complet',
+          verifyCode:   generateMacOSVerification(ports, vpsIp).join('\n'),
+          verifyFilename: 'bash — vérification',
+          verifyLang:   'bash',
+        }
+    }
+  })()
+
+  const note = OS_NOTE[portOs]
 
   const protoColors: Record<Protocol, 'green' | 'cyan' | 'orange'> = {
     tcp: 'cyan',
@@ -84,17 +176,72 @@ export function Ports() {
           Gestionnaire de ports
         </h1>
         <p className="text-slate-400 text-sm">
-          Configurez vos redirections iptables. Les données sont sauvegardées automatiquement.
+          Configurez vos redirections de ports. Choisissez le système cible pour obtenir les bonnes commandes.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: form */}
         <div className="space-y-4">
-          {/* Config globale */}
+
+          {/* Système cible */}
           <div className="card">
-            <h2 className="font-bold text-white text-sm mb-4">Configuration réseau</h2>
-            <div className="space-y-3">
+            <h2 className="font-bold text-white text-sm mb-3">Système cible</h2>
+            <div className="space-y-1.5">
+              {OS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPortOs(opt.value)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                    portOs === opt.value
+                      ? 'border-accent-orange/50 bg-accent-orange/10 text-white'
+                      : 'border-bg-border text-slate-400 hover:border-bg-border/60 hover:text-slate-300'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{opt.label}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{opt.sublabel}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Config réseau (uniquement pour linux-vps) */}
+          {portOs === 'linux-vps' && (
+            <div className="card">
+              <h2 className="font-bold text-white text-sm mb-4">Configuration réseau</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">IP publique du VPS</label>
+                  <input
+                    className={`input-field ${vpsIp.trim() !== '' && !isValidIp(vpsIp) ? 'border-red-500 focus:border-red-400' : ''}`}
+                    placeholder="ex: 185.142.21.45"
+                    value={vpsIp}
+                    onChange={(e) => setVpsIp(e.target.value)}
+                  />
+                  {vpsIp.trim() !== '' && !isValidIp(vpsIp) && (
+                    <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 185.142.21.45</p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">IP locale WireGuard (client)</label>
+                  <input
+                    className={`input-field ${localWgIp.trim() !== '' && !isValidIp(localWgIp) ? 'border-red-500 focus:border-red-400' : ''}`}
+                    placeholder="ex: 10.10.0.2"
+                    value={localWgIp}
+                    onChange={(e) => setLocalWgIp(e.target.value)}
+                  />
+                  {localWgIp.trim() !== '' && !isValidIp(localWgIp) && (
+                    <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 10.10.0.2</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* IP VPS seule pour les autres OS (pour les vérifications) */}
+          {portOs !== 'linux-vps' && (
+            <div className="card">
+              <h2 className="font-bold text-white text-sm mb-4">IP du VPS (vérification)</h2>
               <div>
                 <label className="label">IP publique du VPS</label>
                 <input
@@ -104,23 +251,11 @@ export function Ports() {
                   onChange={(e) => setVpsIp(e.target.value)}
                 />
                 {vpsIp.trim() !== '' && !isValidIp(vpsIp) && (
-                  <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 185.142.21.45</p>
-                )}
-              </div>
-              <div>
-                <label className="label">IP locale WireGuard (client)</label>
-                <input
-                  className={`input-field ${localWgIp.trim() !== '' && !isValidIp(localWgIp) ? 'border-red-500 focus:border-red-400' : ''}`}
-                  placeholder="ex: 10.10.0.2"
-                  value={localWgIp}
-                  onChange={(e) => setLocalWgIp(e.target.value)}
-                />
-                {localWgIp.trim() !== '' && !isValidIp(localWgIp) && (
-                  <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 10.10.0.2</p>
+                  <p className="text-xs text-red-400 mt-1 font-mono">Format invalide</p>
                 )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Presets */}
           <div className="card">
@@ -255,35 +390,37 @@ export function Ports() {
           {/* Generated commands */}
           {ports.length > 0 && (
             <div className="space-y-4">
-              {/* Règles individuelles */}
+              {/* Règles principales */}
               <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <Terminal size={15} className="text-accent-green" />
-                  <h3 className="font-bold text-white text-sm">Règles iptables individuelles</h3>
+                  <h3 className="font-bold text-white text-sm">{mainTitle}</h3>
                 </div>
                 <CodeBlock
-                  code={iptablesRules.join('\n')}
-                  filename="iptables — VPS"
-                  language="bash"
+                  code={mainCode}
+                  filename={mainFilename}
+                  language={portOs === 'windows' ? 'powershell' : 'bash'}
                   onCopy={() => addToast('Règles copiées !')}
                   maxHeight="250px"
                 />
               </div>
 
-              {/* Bloc complet */}
-              <div className="card">
-                <div className="flex items-center gap-2 mb-3">
-                  <Terminal size={15} className="text-accent-cyan" />
-                  <h3 className="font-bold text-white text-sm">Bloc complet à copier-coller</h3>
+              {/* Bloc complet (masqué si identique aux règles principales) */}
+              {portOs === 'linux-vps' && (
+                <div className="card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Terminal size={15} className="text-accent-cyan" />
+                    <h3 className="font-bold text-white text-sm">{fullTitle}</h3>
+                  </div>
+                  <CodeBlock
+                    code={fullCode}
+                    filename={fullFilename}
+                    language="bash"
+                    onCopy={() => addToast('Bloc copié !')}
+                    maxHeight="200px"
+                  />
                 </div>
-                <CodeBlock
-                  code={fullBlock}
-                  filename="iptables — script complet"
-                  language="bash"
-                  onCopy={() => addToast('Bloc copié !')}
-                  maxHeight="200px"
-                />
-              </div>
+              )}
 
               {/* Vérification */}
               <div className="card">
@@ -292,16 +429,16 @@ export function Ports() {
                   <h3 className="font-bold text-white text-sm">Commandes de vérification</h3>
                 </div>
                 <CodeBlock
-                  code={verifyCommands.join('\n')}
-                  filename="bash — vérification"
-                  language="bash"
+                  code={verifyCode}
+                  filename={verifyFilename}
+                  language={verifyLang}
                   onCopy={() => addToast('Commandes copiées !')}
                   maxHeight="200px"
                 />
               </div>
 
-              <NoteBox type="info">
-                Ces commandes sont à exécuter sur le VPS. Remplacez <code className="font-mono text-xs">eth0</code> par le nom de votre interface réseau principale si nécessaire.
+              <NoteBox type={note.type}>
+                {note.text}
               </NoteBox>
             </div>
           )}
