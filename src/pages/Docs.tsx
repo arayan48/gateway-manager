@@ -237,7 +237,7 @@ PersistentKeepalive = 25`}
         <div className="mt-5">
           <p className="text-xs text-slate-500 font-mono mb-2">Installer le tunnel comme service Windows (démarrage automatique) :</p>
           <CodeBlock
-            code={`& "C:\Program Files\WireGuard\wireguard.exe" /installtunnelservice "C:\chemin\wg0-client.conf"
+            code={`& "C:\\Program Files\\WireGuard\\wireguard.exe" /installtunnelservice "C:\\chemin\\wg0-client.conf"
 
 # Vérifier l'état du service
 Get-Service -Name "WireGuardTunnel$wg0" | Select-Object Status, DisplayName`}

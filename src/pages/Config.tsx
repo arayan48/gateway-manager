@@ -110,6 +110,41 @@ function Step1({
 }
 
 // ─── Step 2 ─────────────────────────────────────────────────────
+function KeyField({
+  label, isPrivate, value, onChange, showPrivate, onTogglePrivate,
+}: {
+  label: string
+  isPrivate?: boolean
+  value: string
+  onChange: (v: string) => void
+  showPrivate: boolean
+  onTogglePrivate: () => void
+}) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="relative">
+        <input
+          className="input-field pr-10"
+          type={isPrivate && !showPrivate ? 'password' : 'text'}
+          placeholder="Base64 44 caractères"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        {isPrivate && (
+          <button
+            type="button"
+            onClick={onTogglePrivate}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+          >
+            {showPrivate ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardKeys) => void }) {
   const [showPrivate, setShowPrivate] = useState(false)
 
@@ -122,33 +157,7 @@ function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardK
     })
   }
 
-  const Field = ({
-    label, field, isPrivate,
-  }: {
-    label: string; field: keyof WireGuardKeys; isPrivate?: boolean
-  }) => (
-    <div>
-      <label className="label">{label}</label>
-      <div className="relative">
-        <input
-          className="input-field pr-10"
-          type={isPrivate && !showPrivate ? 'password' : 'text'}
-          placeholder="Base64 44 caractères"
-          value={keys[field]}
-          onChange={(e) => setKeys({ ...keys, [field]: e.target.value })}
-        />
-        {isPrivate && (
-          <button
-            type="button"
-            onClick={() => setShowPrivate(!showPrivate)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-          >
-            {showPrivate ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        )}
-      </div>
-    </div>
-  )
+  const toggle = () => setShowPrivate((v) => !v)
 
   return (
     <div className="space-y-5">
@@ -169,14 +178,14 @@ function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardK
 
       <div className="border border-bg-border rounded-lg p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-300">Serveur VPS</h3>
-        <Field label="Clé privée VPS" field="serverPrivateKey" isPrivate />
-        <Field label="Clé publique VPS" field="serverPublicKey" />
+        <KeyField label="Clé privée VPS" isPrivate value={keys.serverPrivateKey} onChange={(v) => setKeys({ ...keys, serverPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField label="Clé publique VPS" value={keys.serverPublicKey} onChange={(v) => setKeys({ ...keys, serverPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
       </div>
 
       <div className="border border-bg-border rounded-lg p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-300">Client (serveur distant)</h3>
-        <Field label="Clé privée client" field="clientPrivateKey" isPrivate />
-        <Field label="Clé publique client" field="clientPublicKey" />
+        <KeyField label="Clé privée client" isPrivate value={keys.clientPrivateKey} onChange={(v) => setKeys({ ...keys, clientPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField label="Clé publique client" value={keys.clientPublicKey} onChange={(v) => setKeys({ ...keys, clientPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
       </div>
     </div>
   )
