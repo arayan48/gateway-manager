@@ -226,10 +226,13 @@ step "4/5  Configuration iptables"
 
 # Supprimer les règles existantes pour éviter les doublons
 iptables -t nat -F PREROUTING  2>/dev/null || true
+iptables -t nat -F POSTROUTING 2>/dev/null || true
 iptables -F FORWARD             2>/dev/null || true
 
-# Masquerade : permet au trafic WireGuard d'utiliser l'IP du VPS
+# Masquerade sortant : permet au trafic WireGuard d'utiliser l'IP du VPS
 iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o "$IFACE" -j MASQUERADE
+# Masquerade entrant : les réponses aux paquets DNAT repassent par le tunnel WireGuard
+iptables -t nat -A POSTROUTING -o wg0 -j MASQUERADE
 
 # Autoriser le trafic WireGuard entrant
 iptables -A INPUT -p udp --dport ${wgPort} -j ACCEPT
