@@ -16,10 +16,10 @@ function genId() {
 }
 
 function genFakeKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let key = ''
-  for (let i = 0; i < 43; i++) key += chars[Math.floor(Math.random() * chars.length)]
-  return key + '='
+  // Génère 32 octets aléatoires puis les encode en base64 — produit toujours un padding correct
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''))
 }
 
 const steps = [
