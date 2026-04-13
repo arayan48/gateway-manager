@@ -22,9 +22,14 @@ function toBase64(buf: ArrayBuffer): string {
 /** Génère une vraie paire de clés Curve25519 (X25519) via Web Crypto — compatible WireGuard */
 async function generateWgKeypair(): Promise<{ privateKey: string; publicKey: string }> {
   const kp = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveKey', 'deriveBits'])
-  const priv = await crypto.subtle.exportKey('raw', kp.privateKey)
-  const pub  = await crypto.subtle.exportKey('raw', kp.publicKey)
-  return { privateKey: toBase64(priv), publicKey: toBase64(pub) }
+  // Les clés privées X25519 ne peuvent pas être exportées en 'raw' — on passe par 'pkcs8'
+  // et on extrait les 32 derniers octets (la clé brute, après le header DER de 16 octets)
+  const privPkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
+  const pubRaw    = await crypto.subtle.exportKey('raw', kp.publicKey)
+  return {
+    privateKey: toBase64(privPkcs8.slice(privPkcs8.length - 32).buffer),
+    publicKey:  toBase64(pubRaw),
+  }
 }
 
 const steps = [
