@@ -33,3 +33,6 @@ lerna-debug.log*
 # Cache
 *.local
 .turbo
+
+# IA 
+.claude/
