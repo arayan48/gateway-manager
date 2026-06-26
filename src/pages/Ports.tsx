@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { Plus, Trash2, Layers, Terminal, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Trash2, Layers, Terminal, X, Server, ArrowRight } from 'lucide-react'
+import { FaWindows } from 'react-icons/fa'
+import { SiLinux, SiApple } from 'react-icons/si'
+import type { IconType } from 'react-icons'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/ui/Toast'
@@ -8,6 +12,7 @@ import { Badge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import type { PortEntry, Protocol } from '../types'
 import { PORT_PRESETS } from '../types'
+import { genId, isValidIp } from '../utils/helpers'
 import type { PortOS } from '../utils/portCommands'
 import {
   generateIptablesRules,
@@ -21,17 +26,11 @@ import {
   generateMacOSVerification,
 } from '../utils/portCommands'
 
-function genId() {
-  return Math.random().toString(36).slice(2, 9)
-}
-
-const isValidIp = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
-
-const OS_OPTIONS: { value: PortOS; label: string; sublabel: string }[] = [
-  { value: 'linux-vps',    label: '🖥️  VPS Linux',       sublabel: 'iptables DNAT — redirection vers le PC local' },
-  { value: 'linux-client', label: '🐧  PC local Linux',   sublabel: 'iptables INPUT — ouvrir les ports en local' },
-  { value: 'windows',      label: '🪟  PC local Windows', sublabel: 'PowerShell — New-NetFirewallRule' },
-  { value: 'macos',        label: '🍎  PC local macOS',   sublabel: 'pfctl — /etc/pf.conf' },
+const OS_OPTIONS: { value: PortOS; label: string; sublabel: string; icon: IconType | typeof Server }[] = [
+  { value: 'linux-vps',    label: 'VPS Linux',       sublabel: 'iptables DNAT — redirection vers le PC local',  icon: Server },
+  { value: 'linux-client', label: 'PC local Linux',  sublabel: 'iptables INPUT — ouvrir les ports en local',    icon: SiLinux },
+  { value: 'windows',      label: 'PC local Windows',sublabel: 'PowerShell — New-NetFirewallRule',              icon: FaWindows },
+  { value: 'macos',        label: 'PC local macOS',  sublabel: 'pfctl — /etc/pf.conf',                         icon: SiApple },
 ]
 
 const OS_NOTE: Record<PortOS, { type: 'info' | 'warn'; text: string }> = {
@@ -170,14 +169,21 @@ export function Ports() {
       <Toast toasts={toasts} onRemove={removeToast} />
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-white mb-2 flex items-center gap-3">
-          <Layers className="text-accent-orange" size={28} />
-          Gestionnaire de ports
-        </h1>
-        <p className="text-slate-400 text-sm">
-          Configurez vos redirections de ports. Choisissez le système cible pour obtenir les bonnes commandes.
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white mb-1">
+            Gestionnaire de ports
+          </h1>
+          <p className="text-slate-500 text-sm">
+            Ajoutez vos ports, choisissez l'OS cible et copiez les commandes générées.
+            <span className="text-slate-600"> Ces ports sont partagés avec le </span>
+            <Link to="/config" className="text-accent-green hover:underline">Générateur de config</Link>.
+          </p>
+        </div>
+        <Link to="/config" className="btn-primary text-xs flex items-center gap-1.5 shrink-0 hidden sm:flex">
+          Générer les scripts
+          <ArrowRight size={12} />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -192,14 +198,17 @@ export function Ports() {
                 <button
                   key={opt.value}
                   onClick={() => setPortOs(opt.value)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all flex items-center gap-3 ${
                     portOs === opt.value
                       ? 'border-accent-orange/50 bg-accent-orange/10 text-white'
                       : 'border-bg-border text-slate-400 hover:border-bg-border/60 hover:text-slate-300'
                   }`}
                 >
-                  <div className="text-sm font-medium">{opt.label}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{opt.sublabel}</div>
+                  <opt.icon size={16} className="shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">{opt.label}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{opt.sublabel}</div>
+                  </div>
                 </button>
               ))}
             </div>
@@ -259,8 +268,35 @@ export function Ports() {
 
           {/* Presets */}
           <div className="card">
-            <h2 className="font-bold text-white text-sm mb-1">Presets rapides</h2>
-            <p className="text-xs text-slate-600 mb-3">Cliquez pour activer / désactiver</p>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="font-bold text-white text-sm">Presets rapides</h2>
+                <p className="text-xs text-slate-600 mt-0.5">Cliquez pour activer / désactiver</p>
+              </div>
+              {(() => {
+                const allAdded = PORT_PRESETS.every(p => ports.some(x => x.port === p.port))
+                return (
+                  <button
+                    onClick={() => {
+                      if (allAdded) {
+                        const presetPorts = new Set(PORT_PRESETS.map(p => p.port))
+                        setPorts(prev => prev.filter(p => !presetPorts.has(p.port)))
+                        addToast('Presets retirés', 'info')
+                      } else {
+                        const existing = new Set(ports.map(p => p.port))
+                        const toAdd = PORT_PRESETS.filter(p => !existing.has(p.port))
+                          .map(p => ({ id: genId(), port: p.port, protocol: p.protocol, label: p.label }))
+                        setPorts(prev => [...prev, ...toAdd])
+                        addToast(`${toAdd.length} preset(s) ajouté(s)`)
+                      }
+                    }}
+                    className="text-[11px] text-slate-500 hover:text-white transition-colors"
+                  >
+                    {allAdded ? 'Tout retirer' : 'Tout ajouter'}
+                  </button>
+                )
+              })()}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {PORT_PRESETS.map((preset) => {
                 const exists = ports.some((p) => p.port === preset.port)
@@ -345,7 +381,12 @@ export function Ports() {
               </h2>
               {ports.length > 0 && (
                 <button
-                  onClick={() => { setPorts([]); addToast('Liste vidée') }}
+                  onClick={() => {
+                    if (window.confirm(`Supprimer les ${ports.length} port(s) configurés ?`)) {
+                      setPorts([])
+                      addToast('Liste vidée')
+                    }
+                  }}
                   className="text-xs text-slate-500 hover:text-accent-red transition-colors"
                 >
                   Tout supprimer
@@ -377,7 +418,8 @@ export function Ports() {
                     </div>
                     <button
                       onClick={() => removePort(entry.id)}
-                      className="text-slate-600 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"
+                      aria-label={`Supprimer le port ${entry.port}`}
+                      className="text-slate-600 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0"
                     >
                       <Trash2 size={14} />
                     </button>

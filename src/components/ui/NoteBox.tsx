@@ -29,7 +29,7 @@ const config: Record<NoteType, { icon: typeof Info; color: string; bg: string; b
     color: 'text-accent-green',
     bg: 'bg-accent-green/5',
     border: 'border-accent-green/20',
-    label: 'Succès',
+    label: 'OK',
   },
   tip: {
     icon: Lightbulb,
@@ -44,12 +44,12 @@ export function NoteBox({ type = 'info', title, children }: NoteBoxProps) {
   const { icon: Icon, color, bg, border, label } = config[type]
 
   return (
-    <div className={`rounded-lg border p-4 ${bg} ${border}`}>
+    <div className={`rounded-xl border p-4 ${bg} ${border}`} role="note">
       <div className="flex items-start gap-3">
         <Icon size={16} className={`${color} mt-0.5 shrink-0`} />
-        <div className="text-sm">
+        <div className="text-sm min-w-0">
           <span className={`font-semibold ${color}`}>{title || label} — </span>
-          <span className="text-slate-300">{children}</span>
+          <span className="text-slate-300 leading-relaxed">{children}</span>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import type { ProjectConfig, GeneratedFiles } from '../types'
+import { sanitizeLabel } from './helpers'
 
 // Bash ANSI color variable references used in generated shell scripts.
 // Stored as regular JS constants (single-quoted strings) so TypeScript does NOT
@@ -30,10 +31,6 @@ function sanitizeIp(val: string, fallback: string): string {
 function sanitizePort(val: number): number {
   const p = Math.floor(val)
   return p >= 1 && p <= 65535 ? p : 51820
-}
-
-function sanitizeLabel(label: string): string {
-  return label.replace(/[\r\n`$\\;|&<>]/g, '').slice(0, 60)
 }
 
 // ─── Génère les règles iptables pour les scripts (utilise $IFACE) ───────────
@@ -663,8 +660,8 @@ FICHIERS INCLUS
 ---------------
   wg0-server.conf  → Config WireGuard à placer sur le VPS
   wg0-client.conf  → Config WireGuard à placer sur le PC local
-  setup-vps.sh     → Script d'installation complet du VPS       [🖥️  VPS]
-  ${clientScript.padEnd(16)} → Script d'installation du PC local  [💻 PC LOCAL]
+  setup-vps.sh     → Script d'installation complet du VPS       [[VPS]VPS]
+  ${clientScript.padEnd(16)} → Script d'installation du PC local  [[PC]PC LOCAL]
 
 ORDRE D'INSTALLATION
 --------------------

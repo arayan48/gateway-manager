@@ -1,11 +1,7 @@
 import type { PortEntry } from '../types'
+import { sanitizeLabel } from './helpers'
 
 export type PortOS = 'linux-vps' | 'linux-client' | 'windows' | 'macos'
-
-/** Strip characters that could break shell comments or inject commands */
-function sanitizeLabel(label: string): string {
-  return label.replace(/[\r\n`$\\;|&<>]/g, '').slice(0, 60)
-}
 
 // ─── Linux VPS — iptables DNAT (redirection vers le PC local via WireGuard) ──
 

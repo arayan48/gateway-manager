@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Settings, ChevronRight, ChevronLeft, Download, Eye, EyeOff, Shuffle, Plus, Trash2 } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { ChevronRight, ChevronLeft, Download, Eye, EyeOff, Shuffle, Plus, Trash2, RotateCcw, Upload, AlertTriangle, Save } from 'lucide-react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/ui/Toast'
@@ -8,12 +8,11 @@ import { Badge, StepBadge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import type { PortEntry, Protocol, TargetOS, WireGuardKeys } from '../types'
 import { PORT_PRESETS } from '../types'
+import { Link } from 'react-router-dom'
 import { generateAllFiles } from '../utils/generateConfigs'
 import { exportToZip, exportSingleFile } from '../utils/zipExport'
 
-function genId() {
-  return Math.random().toString(36).slice(2, 9)
-}
+import { genId, isValidIp } from '../utils/helpers'
 
 function toBase64(buf: ArrayBuffer): string {
   return btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(''))
@@ -33,9 +32,9 @@ async function generateWgKeypair(): Promise<{ privateKey: string; publicKey: str
 }
 
 const steps = [
-  { id: 1, label: 'Informations générales' },
-  { id: 2, label: 'Clés WireGuard' },
-  { id: 3, label: 'Ports à rediriger' },
+  { id: 1, label: 'Général' },
+  { id: 2, label: 'Clés' },
+  { id: 3, label: 'Ports' },
   { id: 4, label: 'Export' },
 ]
 
@@ -49,7 +48,6 @@ const osOptions: { value: TargetOS; label: string; desc: string; tag: string }[]
   { value: 'macos',         label: 'macOS',                  tag: 'brew',  desc: 'macOS 12 Monterey et supérieur — via Homebrew' },
 ]
 
-const isValidIp  = (v: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim())
 const isValidWgKey = (v: string) => /^[A-Za-z0-9+/]{43}=$/.test(v.trim())
 
 // ─── Step 1 ─────────────────────────────────────────────────────
@@ -103,8 +101,13 @@ function Step1({
           className="input-field w-40"
           type="number"
           placeholder="51820"
+          min={1}
+          max={65535}
           value={wgPort}
-          onChange={(e) => setWgPort(parseInt(e.target.value) || 51820)}
+          onChange={(e) => {
+            const v = parseInt(e.target.value)
+            setWgPort(!v || v < 1 ? 1 : v > 65535 ? 65535 : v)
+          }}
         />
         <p className="text-xs text-slate-600 mt-1 font-mono">Défaut : 51820/UDP — doit être ouvert sur le VPS</p>
       </div>
@@ -167,6 +170,7 @@ function KeyField({
           <button
             type="button"
             onClick={onTogglePrivate}
+            aria-label={showPrivate ? 'Masquer la clé' : 'Afficher la clé'}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
           >
             {showPrivate ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -182,18 +186,27 @@ function KeyField({
   )
 }
 
-function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardKeys) => void }) {
+function Step2({ keys, setKeys, addToast }: { keys: WireGuardKeys; setKeys: (k: WireGuardKeys) => void; addToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [showPrivate, setShowPrivate] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
   const generateTestKeys = async () => {
-    const server = await generateWgKeypair()
-    const client = await generateWgKeypair()
-    setKeys({
-      serverPrivateKey: server.privateKey,
-      serverPublicKey:  server.publicKey,
-      clientPrivateKey: client.privateKey,
-      clientPublicKey:  client.publicKey,
-    })
+    setGenerating(true)
+    try {
+      const server = await generateWgKeypair()
+      const client = await generateWgKeypair()
+      setKeys({
+        serverPrivateKey: server.privateKey,
+        serverPublicKey:  server.publicKey,
+        clientPrivateKey: client.privateKey,
+        clientPublicKey:  client.publicKey,
+      })
+      addToast('Clés Curve25519 générées avec succès')
+    } catch {
+      addToast('Erreur lors de la génération des clés', 'error')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const toggle = () => setShowPrivate((v) => !v)
@@ -204,10 +217,11 @@ function Step2({ keys, setKeys }: { keys: WireGuardKeys; setKeys: (k: WireGuardK
         <div />
         <button
           onClick={generateTestKeys}
-          className="flex items-center gap-2 btn-ghost text-xs"
+          disabled={generating}
+          className="flex items-center gap-2 btn-ghost text-xs disabled:opacity-50"
         >
-          <Shuffle size={13} />
-          Générer des clés de test
+          <Shuffle size={13} className={generating ? 'animate-spin' : ''} />
+          {generating ? 'Génération...' : 'Générer des clés'}
         </button>
       </div>
 
@@ -286,24 +300,26 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
       {/* Ajout manuel */}
       <div className="card">
         <h3 className="text-sm font-semibold text-white mb-3">Ajouter manuellement</h3>
-        <div className="flex gap-2 items-end">
-          <div>
-            <label className="label">Port</label>
-            <input className="input-field w-24" type="number" placeholder="8080" value={newPort} onChange={(e) => setNewPort(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="label">Port</label>
+              <input className="input-field" type="number" placeholder="8080" value={newPort} onChange={(e) => setNewPort(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
+            </div>
+            <div>
+              <label className="label">Protocole</label>
+              <select className="input-field" value={newProto} onChange={(e) => setNewProto(e.target.value as Protocol)}>
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+                <option value="tcp+udp">TCP+UDP</option>
+              </select>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="label">Label</label>
+              <input className="input-field" placeholder="Mon service" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
+            </div>
           </div>
-          <div>
-            <label className="label">Protocole</label>
-            <select className="input-field w-28" value={newProto} onChange={(e) => setNewProto(e.target.value as Protocol)}>
-              <option value="tcp">TCP</option>
-              <option value="udp">UDP</option>
-              <option value="tcp+udp">TCP+UDP</option>
-            </select>
-          </div>
-          <div className="flex-1">
-            <label className="label">Label</label>
-            <input className="input-field" placeholder="Mon service" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
-          </div>
-          <button onClick={addPort} className="btn-primary flex items-center gap-1 shrink-0">
+          <button onClick={addPort} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1">
             <Plus size={13} />
             Ajouter
           </button>
@@ -315,15 +331,15 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
         <div className="space-y-2">
           {ports.map((entry) => (
             <div key={entry.id} className="flex items-center justify-between p-3 bg-bg-elevated border border-bg-border rounded-lg group">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-sm text-white w-10 text-right">{entry.port}</span>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="font-mono text-sm text-white w-10 text-right shrink-0">{entry.port}</span>
                 <Badge variant={entry.protocol === 'tcp' ? 'cyan' : entry.protocol === 'udp' ? 'orange' : 'green'}>
                   {entry.protocol.toUpperCase()}
                 </Badge>
-                <span className="text-slate-400 text-sm">{entry.label}</span>
+                <span className="text-slate-400 text-sm truncate">{entry.label}</span>
               </div>
-              <button onClick={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} className="text-slate-600 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100">
-                <Trash2 size={13} />
+              <button onClick={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} aria-label={`Supprimer le port ${entry.port}`} className="text-slate-600 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0">
+                <Trash2 size={14} />
               </button>
             </div>
           ))}
@@ -334,22 +350,39 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
 }
 
 const fileMeta: Record<string, { machine: string; color: string; hint: string }> = {
-  'setup-vps.sh':     { machine: '🖥️ VPS',      color: 'text-accent-cyan',   hint: 'Exécuter sur le VPS (SSH)' },
-  'setup-client.sh':  { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'Exécuter sur votre PC local' },
-  'setup-client.ps1': { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'PowerShell Admin sur votre PC' },
-  'wg0-server.conf':  { machine: '🖥️ VPS',      color: 'text-accent-cyan',   hint: 'Config WireGuard du VPS' },
-  'wg0-client.conf':  { machine: '💻 PC Local',  color: 'text-accent-orange', hint: 'Config WireGuard du PC local' },
-  'README.txt':       { machine: '📄 Lisez-moi', color: 'text-slate-400',     hint: 'Instructions d\'installation' },
+  'setup-vps.sh':     { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Exécuter sur le VPS (SSH)' },
+  'setup-client.sh':  { machine: 'PC Local', color: 'text-accent-orange', hint: 'Exécuter sur votre PC local' },
+  'setup-client.ps1': { machine: 'PC Local', color: 'text-accent-orange', hint: 'PowerShell Admin sur votre PC' },
+  'wg0-server.conf':  { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Config WireGuard du VPS' },
+  'wg0-client.conf':  { machine: 'PC Local', color: 'text-accent-orange', hint: 'Config WireGuard du PC local' },
+  'README.txt':       { machine: 'Lisez-moi',color: 'text-slate-400',     hint: 'Instructions d\'installation' },
+}
+
+// ─── Validation ────────────────────────────────────────────────
+function getConfigWarnings(config: Parameters<typeof generateAllFiles>[0]): string[] {
+  const warnings: string[] = []
+  if (!config.vpsPublicIp || !isValidIp(config.vpsPublicIp))
+    warnings.push('IP publique du VPS manquante ou invalide')
+  if (!config.keys.serverPrivateKey || !config.keys.serverPublicKey)
+    warnings.push('Clés serveur VPS incomplètes')
+  if (!config.keys.clientPrivateKey || !config.keys.clientPublicKey)
+    warnings.push('Clés client incomplètes')
+  if (config.ports.length === 0)
+    warnings.push('Aucun port configuré — les scripts n\'auront pas de redirections')
+  return warnings
 }
 
 // ─── Step 4 ─────────────────────────────────────────────────────
 function Step4({
   config,
   addToast,
+  onGoToStep,
 }: {
   config: Parameters<typeof generateAllFiles>[0]
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  onGoToStep: (step: number) => void
 }) {
+  const warnings = getConfigWarnings(config)
   const files = generateAllFiles(config)
   const fileEntries = Object.entries(files) as [string, string][]
 
@@ -370,12 +403,64 @@ function Step4({
 
   return (
     <div className="space-y-6">
+      {/* Warnings */}
+      {warnings.length > 0 && (
+        <div className="rounded-xl border border-accent-orange/30 bg-accent-orange/5 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-accent-orange font-semibold text-sm">
+            <AlertTriangle size={16} />
+            Configuration incomplète
+          </div>
+          <ul className="space-y-1">
+            {warnings.map((w, i) => (
+              <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
+                <span className="text-accent-orange mt-0.5">•</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 pt-1">
+            {warnings.some(w => w.includes('IP')) && (
+              <button onClick={() => onGoToStep(1)} className="text-xs text-accent-cyan hover:underline">Corriger (Étape 1)</button>
+            )}
+            {warnings.some(w => w.includes('Clés')) && (
+              <button onClick={() => onGoToStep(2)} className="text-xs text-accent-cyan hover:underline">Corriger (Étape 2)</button>
+            )}
+            {warnings.some(w => w.includes('port')) && (
+              <button onClick={() => onGoToStep(3)} className="text-xs text-accent-cyan hover:underline">Corriger (Étape 3)</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Config summary */}
+      <div className="rounded-xl border border-bg-border bg-bg-elevated p-4">
+        <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-3">Récapitulatif</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div>
+            <div className="text-slate-500">Projet</div>
+            <div className="text-white font-medium truncate">{config.projectName || '—'}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">IP VPS</div>
+            <div className="text-white font-mono">{config.vpsPublicIp || '—'}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">IP Client</div>
+            <div className="text-white font-mono">{config.localWireguardIp}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">OS / Ports</div>
+            <div className="text-white">{config.targetOS} / {config.ports.length} port(s)</div>
+          </div>
+        </div>
+      </div>
+
       {/* Header + bouton ZIP */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div>
           <h3 className="font-bold text-white">Fichiers générés</h3>
           <p className="text-slate-500 text-xs font-mono mt-0.5">
-            {fileEntries.length} fichiers — {config.ports.length} port(s) configuré(s)
+            {fileEntries.length} fichiers — prêts à télécharger
           </p>
         </div>
         <button
@@ -455,6 +540,12 @@ function Step4({
           )
         })}
       </div>
+
+      {/* FAQ link */}
+      <div className="rounded-xl border border-bg-border bg-bg-surface p-4 flex items-center justify-between">
+        <p className="text-sm text-slate-400">Un problème après l'installation ?</p>
+        <Link to="/faq" className="text-sm text-accent-purple hover:underline font-medium">Consulter la FAQ</Link>
+      </div>
     </div>
   )
 }
@@ -488,40 +579,117 @@ export function Config() {
     ports,
   }
 
+  const handleReset = () => {
+    if (!window.confirm('Réinitialiser toute la configuration ? Les données seront perdues.')) return
+    setProjectName('')
+    setVpsIp('')
+    setLocalWgIp('10.10.0.2')
+    setWgPort(51820)
+    setTargetOS('linux-debian')
+    setKeys({ serverPrivateKey: '', serverPublicKey: '', clientPrivateKey: '', clientPublicKey: '' })
+    setPorts([])
+    setStep(1)
+    addToast('Configuration réinitialisée', 'info')
+  }
+
+  const handleImportConf = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      if (!text) return
+      const get = (key: string) => {
+        const m = text.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, 'm'))
+        return m?.[1]?.trim() || ''
+      }
+      const privKey = get('PrivateKey')
+      const addr = get('Address').replace(/\/\d+$/, '')
+      const pubKey = get('PublicKey')
+      const endpoint = get('Endpoint')
+      const listenPort = get('ListenPort')
+
+      if (endpoint) {
+        const [ip, port] = endpoint.split(':')
+        if (ip) setVpsIp(ip)
+        if (port) setWgPort(parseInt(port) || 51820)
+      }
+      if (listenPort) setWgPort(parseInt(listenPort) || 51820)
+      if (addr) setLocalWgIp(addr)
+      if (privKey) {
+        if (endpoint) {
+          setKeys(k => ({ ...k, clientPrivateKey: privKey }))
+        } else {
+          setKeys(k => ({ ...k, serverPrivateKey: privKey }))
+        }
+      }
+      if (pubKey) {
+        if (endpoint) {
+          setKeys(k => ({ ...k, serverPublicKey: pubKey }))
+        } else {
+          setKeys(k => ({ ...k, clientPublicKey: pubKey }))
+        }
+      }
+      addToast('Configuration importée depuis ' + file.name)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }, [setVpsIp, setWgPort, setLocalWgIp, setKeys, addToast])
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
       <Toast toasts={toasts} onRemove={removeToast} />
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-white mb-2 flex items-center gap-3">
-          <Settings className="text-accent-green" size={28} />
-          Générateur de configuration
-        </h1>
-        <p className="text-slate-400 text-sm">
-          Remplissez les informations et exportez vos fichiers WireGuard prêts à l'emploi.
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white mb-1">
+            Générateur de configuration
+          </h1>
+          <p className="text-slate-500 text-sm">
+            4 étapes pour générer vos fichiers WireGuard et scripts d'installation.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <label className="btn-ghost text-xs flex items-center gap-1.5 cursor-pointer">
+            <Upload size={13} />
+            <span className="hidden sm:inline">Importer .conf</span>
+            <input type="file" accept=".conf" onChange={handleImportConf} className="hidden" />
+          </label>
+          <button onClick={handleReset} className="btn-ghost text-xs flex items-center gap-1.5 text-slate-500 hover:text-accent-red hover:border-accent-red/30">
+            <RotateCcw size={13} />
+            <span className="hidden sm:inline">Reset</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Auto-save indicator */}
+      <div className="flex items-center gap-1.5 text-[11px] text-slate-600 mb-6">
+        <Save size={11} />
+        Sauvegarde automatique dans le navigateur
       </div>
 
       {/* Stepper */}
-      <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
+      <div className="flex items-center mb-8">
         {steps.map((s, i) => (
-          <div key={s.id} className="flex items-center gap-2 shrink-0">
+          <div key={s.id} className="flex items-center flex-1 last:flex-none">
             <button
               onClick={() => setStep(s.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border
-                ${step === s.id
-                  ? 'border-accent-green/40 bg-accent-green/10 text-white'
-                  : step > s.id
-                    ? 'border-bg-border bg-bg-elevated text-accent-green cursor-pointer hover:border-accent-green/30'
-                    : 'border-bg-border text-slate-500 cursor-pointer hover:text-slate-300'
-                }`}
+              className="flex flex-col items-center gap-1.5 group"
             >
               <StepBadge number={s.id} active={step === s.id} />
-              <span className="hidden sm:inline">{s.label}</span>
+              <span className={`text-xs font-medium transition-colors hidden sm:block
+                ${step === s.id ? 'text-white' : step > s.id ? 'text-accent-green' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                {s.label}
+              </span>
             </button>
             {i < steps.length - 1 && (
-              <ChevronRight size={14} className="text-slate-600 shrink-0" />
+              <div className="flex-1 mx-2 sm:mx-3 h-px bg-bg-border relative">
+                <div
+                  className="absolute inset-y-0 left-0 bg-accent-green transition-all duration-300"
+                  style={{ width: step > s.id ? '100%' : '0%' }}
+                />
+              </div>
             )}
           </div>
         ))}
@@ -529,10 +697,6 @@ export function Config() {
 
       {/* Step content */}
       <div className="card mb-6 animate-fade-in">
-        <h2 className="font-bold text-white mb-6 flex items-center gap-2">
-          <StepBadge number={step} active />
-          <span>{steps[step - 1].label}</span>
-        </h2>
 
         {step === 1 && (
           <Step1
@@ -543,9 +707,9 @@ export function Config() {
             targetOS={targetOS} setTargetOS={setTargetOS}
           />
         )}
-        {step === 2 && <Step2 keys={keys} setKeys={setKeys} />}
+        {step === 2 && <Step2 keys={keys} setKeys={setKeys} addToast={addToast} />}
         {step === 3 && <Step3 ports={ports} setPorts={setPorts} />}
-        {step === 4 && <Step4 config={config} addToast={addToast} />}
+        {step === 4 && <Step4 config={config} addToast={addToast} onGoToStep={setStep} />}
       </div>
 
       {/* Navigation buttons */}

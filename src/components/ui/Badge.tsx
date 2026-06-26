@@ -21,7 +21,7 @@ const variants: Record<BadgeVariant, string> = {
 export function Badge({ children, variant = 'default', size = 'sm' }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1 border rounded font-mono font-medium
+      className={`inline-flex items-center gap-1 border rounded-md font-mono font-medium
         ${size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1'}
         ${variants[variant]}`}
     >
@@ -33,9 +33,9 @@ export function Badge({ children, variant = 'default', size = 'sm' }: BadgeProps
 export function StepBadge({ number, active }: { number: number; active?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0
+      className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0 transition-all duration-200
         ${active
-          ? 'bg-accent-green text-bg-base'
+          ? 'bg-accent-green text-bg-base shadow-md shadow-accent-green/20'
           : 'bg-bg-elevated border border-bg-border text-slate-400'
         }`}
     >

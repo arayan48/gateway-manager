@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Monitor, Terminal, Server, Apple, ChevronRight, CheckCircle, ExternalLink } from 'lucide-react'
+import { ChevronRight, CheckCircle, ExternalLink, Server, Monitor } from 'lucide-react'
+import { FaWindows } from 'react-icons/fa'
+import { SiDebian, SiLinux, SiApple, SiWireguard, SiFedora, SiAlpinelinux, SiArchlinux, SiHomebrew } from 'react-icons/si'
+import type { IconType } from 'react-icons'
 import { CodeBlock } from '../components/ui/CodeBlock'
 import { NoteBox } from '../components/ui/NoteBox'
 import { Badge } from '../components/ui/Badge'
@@ -52,17 +55,17 @@ type MachineType = 'vps' | 'client' | 'both'
 function MachineBadge({ type }: { type: MachineType }) {
   if (type === 'vps') return (
     <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan">
-      🖥️ VPS
+      <Server size={10} /> VPS
     </span>
   )
   if (type === 'client') return (
     <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-accent-orange/40 bg-accent-orange/10 text-accent-orange">
-      💻 PC Client
+      <Monitor size={10} /> PC Client
     </span>
   )
   return (
     <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-slate-500/40 bg-slate-500/10 text-slate-400">
-      🖥️ VPS + 💻 Client
+      <Server size={10} /> VPS + <Monitor size={10} /> Client
     </span>
   )
 }
@@ -86,7 +89,7 @@ function ArchitectureOverview() {
       <div className="p-4">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch">
           <div className="flex-1 border border-accent-cyan/30 rounded-lg p-3 bg-accent-cyan/5">
-            <div className="text-accent-cyan font-bold text-sm mb-1.5 flex items-center gap-1.5">🖥️ VPS <span className="text-[10px] font-normal text-accent-cyan/70">(Serveur relais)</span></div>
+            <div className="text-accent-cyan font-bold text-sm mb-1.5 flex items-center gap-1.5"><Server size={14} /> VPS <span className="text-[10px] font-normal text-accent-cyan/70">(Serveur relais)</span></div>
             <ul className="space-y-1 text-xs text-slate-400">
               <li>• Toujours <strong className="text-white">Linux</strong> (Debian / Ubuntu recommandé)</li>
               <li>• Possède une <strong className="text-white">IP publique</strong> accessible depuis internet</li>
@@ -100,7 +103,7 @@ function ArchitectureOverview() {
           <div className="sm:hidden flex justify-center text-accent-green font-mono text-lg">↕</div>
 
           <div className="flex-1 border border-accent-orange/30 rounded-lg p-3 bg-accent-orange/5">
-            <div className="text-accent-orange font-bold text-sm mb-1.5 flex items-center gap-1.5">💻 PC Client <span className="text-[10px] font-normal text-accent-orange/70">(Votre machine)</span></div>
+            <div className="text-accent-orange font-bold text-sm mb-1.5 flex items-center gap-1.5"><Monitor size={14} /> PC Client <span className="text-[10px] font-normal text-accent-orange/70">(Votre machine)</span></div>
             <ul className="space-y-1 text-xs text-slate-400">
               <li>• Peut être <strong className="text-white">Windows, Linux ou macOS</strong></li>
               <li>• Derrière un routeur/NAT, <strong className="text-white">sans IP publique</strong></li>
@@ -124,7 +127,7 @@ interface DocOS {
   id: OS
   label: string
   subtitle: string
-  icon: typeof Monitor
+  icon: IconType
   badge: string
   badgeVariant: 'blue' | 'orange' | 'purple' | 'gray'
   color: string
@@ -132,10 +135,10 @@ interface DocOS {
 }
 
 const osList: DocOS[] = [
-  { id: 'windows',      label: 'Windows',          subtitle: 'Windows 10 / 11 / Server',   icon: Monitor,  badge: 'PowerShell',    badgeVariant: 'blue',   color: 'text-blue-400',       borderColor: 'border-blue-500/40' },
-  { id: 'linux-debian', label: 'Debian / Ubuntu',  subtitle: 'Distros à base de apt',       icon: Terminal, badge: 'apt install',   badgeVariant: 'orange', color: 'text-accent-orange',  borderColor: 'border-accent-orange/40' },
-  { id: 'linux-other',  label: 'Fedora / Alpine / Arch', subtitle: 'Autres distros Linux', icon: Server,   badge: 'dnf/apk/pacman',badgeVariant: 'purple', color: 'text-accent-purple',  borderColor: 'border-accent-purple/40' },
-  { id: 'macos',        label: 'macOS',            subtitle: 'macOS 12+ via Homebrew',      icon: Apple,    badge: 'Homebrew',      badgeVariant: 'gray',   color: 'text-slate-300',      borderColor: 'border-slate-500/40' },
+  { id: 'windows',      label: 'Windows',                  subtitle: 'Windows 10 / 11 / Server',  icon: FaWindows, badge: 'PowerShell',    badgeVariant: 'blue',   color: 'text-blue-400',       borderColor: 'border-blue-500/40' },
+  { id: 'linux-debian', label: 'Debian / Ubuntu',          subtitle: 'Distros à base de apt',      icon: SiDebian,  badge: 'apt install',   badgeVariant: 'orange', color: 'text-accent-orange',  borderColor: 'border-accent-orange/40' },
+  { id: 'linux-other',  label: 'Fedora / Alpine / Arch',   subtitle: 'Autres distros Linux',       icon: SiLinux,   badge: 'dnf/apk/pacman',badgeVariant: 'purple', color: 'text-accent-purple',  borderColor: 'border-accent-purple/40' },
+  { id: 'macos',        label: 'macOS',                    subtitle: 'macOS 12+ via Homebrew',     icon: SiApple,   badge: 'Homebrew',      badgeVariant: 'gray',   color: 'text-slate-300',      borderColor: 'border-slate-500/40' },
 ]
 
 const sections = [
@@ -165,14 +168,14 @@ function WindowsDocs() {
 
         <div className="space-y-2 mb-5">
           <DownloadCard
-            icon="🪟"
+            icon={<FaWindows size={20} className="text-blue-400" />}
             title="WireGuard pour Windows (.exe)"
             subtitle="Installateur graphique officiel — wireguard.com"
             href="https://download.wireguard.com/windows-client/wireguard-installer.exe"
             tag="Recommandé"
           />
           <DownloadCard
-            icon="🌐"
+            icon={<SiWireguard size={20} className="text-accent-red" />}
             title="Page officielle wireguard.com"
             subtitle="Toutes les versions, notes de release, vérification de signature"
             href="https://www.wireguard.com/install/"
@@ -191,7 +194,7 @@ function WindowsDocs() {
 Invoke-WebRequest -Uri "https://download.wireguard.com/windows-client/wireguard-installer.exe" -OutFile $installer
 Start-Process $installer -ArgumentList "/S" -Wait
 Remove-Item $installer -Force`}
-            filename="💻 PC Client — PowerShell (Admin) — optionnel"
+            filename="[PC]PC Client — PowerShell (Admin) — optionnel"
             language="powershell"
             onCopy={copy}
           />
@@ -224,7 +227,7 @@ PublicKey = <CLE_PUBLIQUE_SERVEUR_VPS>   # clé publique du VPS
 Endpoint = <IP_VPS>:51820               # IP publique du VPS + port WireGuard
 AllowedIPs = 10.10.0.1/32               # seul le trafic vers le VPS passe par le tunnel
 PersistentKeepalive = 25`}
-          filename="💻 PC Client — wg0-client.conf"
+          filename="[PC]PC Client — wg0-client.conf"
           language="ini"
           onCopy={copy}
         />
@@ -242,7 +245,7 @@ PersistentKeepalive = 25`}
 
 # Vérifier l'état du service
 Get-Service -Name "WireGuardTunnel$wg0" | Select-Object Status, DisplayName`}
-            filename="💻 PC Client — PowerShell (Admin)"
+            filename="[PC]PC Client — PowerShell (Admin)"
             language="powershell"
             onCopy={copy}
           />
@@ -267,7 +270,7 @@ New-NetFirewallRule -DisplayName "WG-FiveM" -Direction Inbound -Protocol UDP -Lo
 
 # Lister les règles WG créées
 Get-NetFirewallRule | Where-Object {$_.DisplayName -like "WG-*"} | Select-Object DisplayName, Enabled`}
-            filename="💻 PC Client — PowerShell (Admin)"
+            filename="[PC]PC Client — PowerShell (Admin)"
             language="powershell"
             onCopy={copy}
           />
@@ -284,7 +287,7 @@ Get-NetFirewallRule | Where-Object {$_.DisplayName -like "WG-*"} | Select-Object
 
         <p className="text-slate-400 text-sm mb-3">Vérifications à faire <strong className="text-white">une fois le tunnel démarré</strong> des deux côtés (VPS configuré + client démarré).</p>
 
-        <p className="text-xs text-slate-500 font-mono mb-2">Sur votre 💻 PC Windows :</p>
+        <p className="text-xs text-slate-500 font-mono mb-2">Sur votre [PC]PC Windows :</p>
         <CodeBlock
           code={`# Statut du service WireGuard (doit afficher "Running")
 Get-Service "WireGuardTunnel$wg0"
@@ -294,20 +297,20 @@ ping 10.10.0.1
 
 # Test d'un port exposé (exemple RDP)
 Test-NetConnection -ComputerName <IP_VPS_PUBLIQUE> -Port 3389`}
-          filename="💻 PC Client — PowerShell"
+          filename="[PC]PC Client — PowerShell"
           language="powershell"
           onCopy={copy}
         />
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">Sur le 🖥️ VPS (via SSH) :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">Sur le [VPS]VPS (via SSH) :</p>
           <CodeBlock
             code={`# Affiche les peers connectés et le trafic échangé
 wg show
 
 # Vérifie les règles de redirection iptables
 iptables -t nat -L PREROUTING -n -v`}
-            filename="🖥️ VPS — bash"
+            filename="[VPS]VPS — bash"
             language="bash"
             onCopy={copy}
           />
@@ -324,18 +327,21 @@ iptables -t nat -L PREROUTING -n -v`}
       <div id="troubleshoot">
         <StepTitle n={5} label="Dépannage" color={C} />
         <div className="space-y-3">
-          <NoteBox type="warn" title="💻 Client — Tunnel ne démarre pas">
+          <NoteBox type="warn" title="[PC]Client — Tunnel ne démarre pas">
             Vérifiez que la clé privée est en base64 valide (44 caractères) et que l'adresse IP du VPS est correcte.
           </NoteBox>
-          <NoteBox type="warn" title="🖥️ VPS — Port 51820 inaccessible">
+          <NoteBox type="warn" title="[VPS]VPS — Port 51820 inaccessible">
             Vérifiez que le port 51820/UDP est ouvert dans le pare-feu de votre hébergeur (règles de sécurité du VPS).
           </NoteBox>
-          <NoteBox type="warn" title="💻 Client — Pas de connectivité réseau après connexion">
+          <NoteBox type="warn" title="[PC]Client — Pas de connectivité réseau après connexion">
             Vérifiez que le service <strong>IP Helper</strong> est démarré dans les Services Windows (<code className="font-mono text-xs">services.msc</code>).
           </NoteBox>
-          <NoteBox type="info" title="💻 Client — Logs WireGuard">
+          <NoteBox type="info" title="[PC]Client — Logs WireGuard">
             Accessibles dans l'interface graphique WireGuard → onglet Log, ou via l'Observateur d'événements Windows.
           </NoteBox>
+          <div className="mt-4">
+            <Link to="/faq" className="text-sm text-accent-purple hover:underline">Voir toutes les questions fréquentes →</Link>
+          </div>
         </div>
       </div>
     </div>
@@ -361,7 +367,7 @@ function LinuxDebianDocs() {
 
         <div className="space-y-2 mb-5">
           <DownloadCard
-            icon="🐧"
+            icon={<SiDebian size={20} className="text-accent-orange" />}
             title="WireGuard via apt — Debian 12 / Ubuntu 22.04+"
             subtitle="Paquet officiel dans les dépôts — aucun dépôt tiers nécessaire"
             href="https://www.wireguard.com/install/#ubuntu-module-tools"
@@ -375,7 +381,7 @@ sudo apt update && sudo apt install -y wireguard wireguard-tools iptables-persis
 
 # Vérifier
 wg --version`}
-          filename="🖥️ VPS + 💻 PC Client — bash"
+          filename="[VPS]VPS + [PC]PC Client — bash"
           language="bash"
           onCopy={copy}
         />
@@ -389,34 +395,34 @@ wg --version`}
       <div id="wireguard">
         <StepTitle n={2} label="Configuration du tunnel WireGuard" color={C} machine="both" />
 
-        <p className="text-xs text-slate-500 font-mono mb-2">🖥️ VPS — Générer les clés du serveur :</p>
+        <p className="text-xs text-slate-500 font-mono mb-2">[VPS]VPS — Générer les clés du serveur :</p>
         <CodeBlock
           code={`# Sur le VPS : générer la paire de clés du serveur
 sudo wg genkey | tee /etc/wireguard/server_privatekey | wg pubkey > /etc/wireguard/server_publickey
 
 # Afficher la clé publique du VPS (à copier dans le fichier client)
 cat /etc/wireguard/server_publickey`}
-          filename="🖥️ VPS — bash"
+          filename="[VPS]VPS — bash"
           language="bash"
           onCopy={copy}
         />
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">💻 PC Client — Générer les clés du client :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[PC]PC Client — Générer les clés du client :</p>
           <CodeBlock
             code={`# Sur le PC client : générer la paire de clés du client
 sudo wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
 
 # Afficher la clé publique du client (à copier dans la config du VPS)
 cat /etc/wireguard/publickey`}
-            filename="💻 PC Client — bash"
+            filename="[PC]PC Client — bash"
             language="bash"
             onCopy={copy}
           />
         </div>
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">🖥️ VPS — Fichier /etc/wireguard/wg0.conf :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[VPS]VPS — Fichier /etc/wireguard/wg0.conf :</p>
           <CodeBlock
             code={`[Interface]
 PrivateKey = <CLE_PRIVEE_DU_VPS>   # contenu de server_privatekey
@@ -426,14 +432,14 @@ ListenPort = 51820                 # port d'écoute (UDP)
 [Peer]
 PublicKey = <CLE_PUBLIQUE_CLIENT>  # contenu de publickey sur le PC client
 AllowedIPs = 10.10.0.2/32          # IP autorisée pour ce client`}
-            filename="🖥️ VPS — /etc/wireguard/wg0.conf"
+            filename="[VPS]VPS — /etc/wireguard/wg0.conf"
             language="ini"
             onCopy={copy}
           />
         </div>
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">💻 PC Client — Fichier /etc/wireguard/wg0.conf :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[PC]PC Client — Fichier /etc/wireguard/wg0.conf :</p>
           <CodeBlock
             code={`[Interface]
 PrivateKey = <CLE_PRIVEE_DU_CLIENT>  # contenu de privatekey sur le PC client
@@ -444,7 +450,7 @@ PublicKey = <CLE_PUBLIQUE_VPS>       # contenu de server_publickey sur le VPS
 Endpoint = <IP_VPS>:51820           # IP publique du VPS + port WireGuard
 AllowedIPs = 10.10.0.1/32           # seul le trafic vers le VPS passe par le tunnel
 PersistentKeepalive = 25`}
-            filename="💻 PC Client — /etc/wireguard/wg0.conf"
+            filename="[PC]PC Client — /etc/wireguard/wg0.conf"
             language="ini"
             onCopy={copy}
           />
@@ -457,7 +463,7 @@ PersistentKeepalive = 25`}
 sudo systemctl enable wg-quick@wg0
 sudo systemctl start wg-quick@wg0
 sudo systemctl status wg-quick@wg0`}
-            filename="🖥️ VPS + 💻 PC Client — bash (à faire sur les deux)"
+            filename="[VPS]VPS + [PC]PC Client — bash (à faire sur les deux)"
             language="bash"
             onCopy={copy}
           />
@@ -488,7 +494,7 @@ sudo iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE
 
 # 3. Sauvegarder les règles (persistent au redémarrage)
 sudo netfilter-persistent save`}
-            filename="🖥️ VPS UNIQUEMENT — bash"
+            filename="[VPS]VPS UNIQUEMENT — bash"
             language="bash"
             onCopy={copy}
           />
@@ -504,20 +510,20 @@ sudo netfilter-persistent save`}
       <div id="verify">
         <StepTitle n={4} label="Vérification" color={C} machine="both" />
 
-        <p className="text-xs text-slate-500 font-mono mb-2">🖥️ VPS :</p>
+        <p className="text-xs text-slate-500 font-mono mb-2">[VPS]VPS :</p>
         <CodeBlock
           code={`# Affiche les peers connectés et le trafic
 sudo wg show
 
 # Vérifie les règles de redirection
 sudo iptables -t nat -L PREROUTING -n -v`}
-          filename="🖥️ VPS — bash"
+          filename="[VPS]VPS — bash"
           language="bash"
           onCopy={copy}
         />
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">💻 PC Client :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[PC]PC Client :</p>
           <CodeBlock
             code={`# Statut du tunnel
 sudo wg show
@@ -527,7 +533,7 @@ ping -c 3 10.10.0.1
 
 # Test d'accessibilité d'un port exposé depuis l'extérieur
 nc -zv <IP_VPS_PUBLIQUE> <PORT>`}
-            filename="💻 PC Client — bash"
+            filename="[PC]PC Client — bash"
             language="bash"
             onCopy={copy}
           />
@@ -537,16 +543,19 @@ nc -zv <IP_VPS_PUBLIQUE> <PORT>`}
       <div id="troubleshoot">
         <StepTitle n={5} label="Dépannage" color={C} />
         <div className="space-y-3">
-          <NoteBox type="warn" title="💻 Client — Clé invalide">
+          <NoteBox type="warn" title="[PC]Client — Clé invalide">
             Si WireGuard affiche "Invalid key length", la clé n'est pas en base64 valide (44 caractères attendus).
             Régénérez les clés avec <code className="font-mono text-xs">wg genkey | wg pubkey</code>.
           </NoteBox>
-          <NoteBox type="warn" title="🖥️ VPS — Forwarding non activé">
+          <NoteBox type="warn" title="[VPS]VPS — Forwarding non activé">
             Si les ports sont redirigés mais inaccessibles, vérifiez : <code className="font-mono text-xs">cat /proc/sys/net/ipv4/ip_forward</code> — doit afficher <code className="font-mono text-xs">1</code>.
           </NoteBox>
           <NoteBox type="info" title="Logs en temps réel (sur chaque machine)">
             <code className="text-accent-cyan font-mono text-xs">journalctl -f -u wg-quick@wg0</code>
           </NoteBox>
+          <div className="mt-4">
+            <Link to="/faq" className="text-sm text-accent-purple hover:underline">Voir toutes les questions fréquentes →</Link>
+          </div>
         </div>
       </div>
     </div>
@@ -571,9 +580,9 @@ function LinuxGenericDocs() {
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
-          <DownloadCard icon="🏔️" title="Fedora / RHEL / CentOS" subtitle="dnf install wireguard-tools" href="https://www.wireguard.com/install/#fedora-tools" tag="dnf" tagColor="text-blue-400 border-blue-400/30 bg-blue-400/10" />
-          <DownloadCard icon="❄️" title="Alpine Linux" subtitle="apk add wireguard-tools" href="https://www.wireguard.com/install/#alpine-tools" tag="apk" tagColor="text-accent-cyan border-accent-cyan/30 bg-accent-cyan/10" />
-          <DownloadCard icon="🎯" title="Arch / Manjaro" subtitle="pacman -S wireguard-tools" href="https://wiki.archlinux.org/title/WireGuard" tag="pacman" tagColor="text-accent-purple border-accent-purple/30 bg-accent-purple/10" />
+          <DownloadCard icon={<SiFedora size={20} className="text-blue-400" />} title="Fedora / RHEL / CentOS" subtitle="dnf install wireguard-tools" href="https://www.wireguard.com/install/#fedora-tools" tag="dnf" tagColor="text-blue-400 border-blue-400/30 bg-blue-400/10" />
+          <DownloadCard icon={<SiAlpinelinux size={20} className="text-accent-cyan" />} title="Alpine Linux" subtitle="apk add wireguard-tools" href="https://www.wireguard.com/install/#alpine-tools" tag="apk" tagColor="text-accent-cyan border-accent-cyan/30 bg-accent-cyan/10" />
+          <DownloadCard icon={<SiArchlinux size={20} className="text-accent-purple" />} title="Arch / Manjaro" subtitle="pacman -S wireguard-tools" href="https://wiki.archlinux.org/title/WireGuard" tag="pacman" tagColor="text-accent-purple border-accent-purple/30 bg-accent-purple/10" />
         </div>
 
         <CodeBlock
@@ -588,7 +597,7 @@ sudo pacman -Sy wireguard-tools
 
 # openSUSE
 sudo zypper install wireguard-tools`}
-          filename="💻 PC Client — bash (choisissez votre distro)"
+          filename="[PC]PC Client — bash (choisissez votre distro)"
           language="bash"
           onCopy={copy}
         />
@@ -627,7 +636,7 @@ PersistentKeepalive = 25
 EOF
 
 chmod 600 /etc/wireguard/wg0.conf`}
-          filename="💻 PC Client — bash"
+          filename="[PC]PC Client — bash"
           language="bash"
           onCopy={copy}
         />
@@ -642,7 +651,7 @@ rc-update add wg-quick default && wg-quick up wg0
 
 # Manuel (fonctionne partout)
 wg-quick up /etc/wireguard/wg0.conf`}
-            filename="💻 PC Client — bash"
+            filename="[PC]PC Client — bash"
             language="bash"
             onCopy={copy}
           />
@@ -668,7 +677,7 @@ iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -j MASQUERADE
 # Sauvegarder les règles selon la distro du VPS
 iptables-save > /etc/iptables/rules.v4   # Fedora / Arch
 rc-service iptables save                 # Alpine`}
-            filename="🖥️ VPS UNIQUEMENT — bash"
+            filename="[VPS]VPS UNIQUEMENT — bash"
             language="bash"
             onCopy={copy}
           />
@@ -678,7 +687,7 @@ rc-service iptables save                 # Alpine`}
       <div id="verify">
         <StepTitle n={4} label="Vérification" color={C} machine="both" />
 
-        <p className="text-xs text-slate-500 font-mono mb-2">💻 PC Client :</p>
+        <p className="text-xs text-slate-500 font-mono mb-2">[PC]PC Client :</p>
         <CodeBlock
           code={`# Statut du tunnel et peers connectés
 wg show
@@ -686,20 +695,20 @@ ip addr show wg0
 
 # Ping vers le VPS via le tunnel
 ping -c 3 10.10.0.1`}
-          filename="💻 PC Client — bash"
+          filename="[PC]PC Client — bash"
           language="bash"
           onCopy={copy}
         />
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">🖥️ VPS :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[VPS]VPS :</p>
           <CodeBlock
             code={`# Vérifie les peers WireGuard connectés
 wg show
 
 # Vérifie les règles de redirection iptables
 iptables -t nat -L PREROUTING -n -v`}
-            filename="🖥️ VPS — bash"
+            filename="[VPS]VPS — bash"
             language="bash"
             onCopy={copy}
           />
@@ -709,15 +718,18 @@ iptables -t nat -L PREROUTING -n -v`}
       <div id="troubleshoot">
         <StepTitle n={5} label="Dépannage" color={C} />
         <div className="space-y-3">
-          <NoteBox type="warn" title="💻 Client — Module non chargé">
+          <NoteBox type="warn" title="[PC]Client — Module non chargé">
             Si WireGuard renvoie "Operation not supported", chargez le module manuellement : <code className="font-mono text-xs">sudo modprobe wireguard</code>
           </NoteBox>
-          <NoteBox type="warn" title="🖥️ VPS — Forwarding non activé">
+          <NoteBox type="warn" title="[VPS]VPS — Forwarding non activé">
             Vérifiez : <code className="font-mono text-xs">cat /proc/sys/net/ipv4/ip_forward</code> — doit afficher <code className="font-mono text-xs">1</code>.
           </NoteBox>
           <NoteBox type="info" title="Logs (sur chaque machine)">
             Systemd : <code className="font-mono text-xs">journalctl -f -u wg-quick@wg0</code> — Alpine : <code className="font-mono text-xs">wg show</code>
           </NoteBox>
+          <div className="mt-4">
+            <Link to="/faq" className="text-sm text-accent-purple hover:underline">Voir toutes les questions fréquentes →</Link>
+          </div>
         </div>
       </div>
     </div>
@@ -743,14 +755,14 @@ function MacOSDocs() {
 
         <div className="space-y-2 mb-5">
           <DownloadCard
-            icon={<Apple size={20} className="text-slate-300" />}
+            icon={<SiApple size={20} className="text-slate-300" />}
             title="WireGuard — App Store macOS"
             subtitle="Application officielle gratuite — gestion graphique des tunnels, permissions automatiques"
             href="https://apps.apple.com/fr/app/wireguard/id1451685025"
             tag="Recommandé"
           />
           <DownloadCard
-            icon="🍺"
+            icon={<SiHomebrew size={20} className="text-amber-400" />}
             title="Homebrew — wireguard-tools (ligne de commande)"
             subtitle="Pour les utilisateurs avancés — wg-quick, wg show, scripts"
             href="https://brew.sh"
@@ -769,7 +781,7 @@ function MacOSDocs() {
 brew install wireguard-tools
 
 wg --version`}
-          filename="💻 PC Client (Mac) — bash"
+          filename="[PC]PC Client (Mac) — bash"
           language="bash"
           onCopy={copy}
         />
@@ -817,7 +829,7 @@ chmod 600 /usr/local/etc/wireguard/wg0.conf
 # Démarrer / arrêter le tunnel
 sudo wg-quick up /usr/local/etc/wireguard/wg0.conf
 sudo wg-quick down /usr/local/etc/wireguard/wg0.conf`}
-          filename="💻 PC Client (Mac) — bash"
+          filename="[PC]PC Client (Mac) — bash"
           language="bash"
           onCopy={copy}
         />
@@ -840,7 +852,7 @@ sudo wg-quick down /usr/local/etc/wireguard/wg0.conf`}
       <div id="verify">
         <StepTitle n={4} label="Vérification" color={C} machine="both" />
 
-        <p className="text-xs text-slate-500 font-mono mb-2">💻 Mac :</p>
+        <p className="text-xs text-slate-500 font-mono mb-2">[PC]Mac :</p>
         <CodeBlock
           code={`# Statut du tunnel
 sudo wg show
@@ -850,20 +862,20 @@ ping -c 3 10.10.0.1
 
 # Traceroute pour diagnostiquer le chemin
 traceroute 10.10.0.1`}
-          filename="💻 PC Client (Mac) — bash"
+          filename="[PC]PC Client (Mac) — bash"
           language="bash"
           onCopy={copy}
         />
 
         <div className="mt-4">
-          <p className="text-xs text-slate-500 font-mono mb-2">🖥️ VPS (via SSH) :</p>
+          <p className="text-xs text-slate-500 font-mono mb-2">[VPS]VPS (via SSH) :</p>
           <CodeBlock
             code={`# Vérifie les peers connectés et le trafic
 wg show
 
 # Vérifie les règles de redirection iptables
 iptables -t nat -L PREROUTING -n -v`}
-            filename="🖥️ VPS — bash"
+            filename="[VPS]VPS — bash"
             language="bash"
             onCopy={copy}
           />
@@ -873,15 +885,18 @@ iptables -t nat -L PREROUTING -n -v`}
       <div id="troubleshoot">
         <StepTitle n={5} label="Dépannage" color={C} />
         <div className="space-y-3">
-          <NoteBox type="warn" title="💻 Mac — Permissions réseau">
+          <NoteBox type="warn" title="[PC]Mac — Permissions réseau">
             macOS demande d'autoriser l'extension réseau au premier lancement. Allez dans Réglages Système → Confidentialité et sécurité → autoriser WireGuard.
           </NoteBox>
-          <NoteBox type="warn" title="🖥️ VPS — Port 51820 inaccessible">
+          <NoteBox type="warn" title="[VPS]VPS — Port 51820 inaccessible">
             Vérifiez que le port 51820/UDP est ouvert dans les règles de sécurité de votre hébergeur VPS.
           </NoteBox>
           <NoteBox type="tip" title="Conseil — App Store">
             Avec l'App Store WireGuard, importez directement le fichier <code className="font-mono text-xs">.conf</code> généré par le Générateur de config de cet outil. Plus simple que la CLI.
           </NoteBox>
+          <div className="mt-4">
+            <Link to="/faq" className="text-sm text-accent-purple hover:underline">Voir toutes les questions fréquentes →</Link>
+          </div>
         </div>
       </div>
     </div>
