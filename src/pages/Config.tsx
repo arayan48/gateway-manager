@@ -292,7 +292,7 @@ function Step3({
       <OpenAllPortsToggle id="cfg-open-all-ports" checked={openAllPorts} onChange={setOpenAllPorts} />
 
       {/* Presets */}
-      <div className={`card ${openAllPorts ? 'opacity-50' : ''}`}>
+      <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
         <h3 className="text-sm font-semibold text-white mb-3">Presets rapides</h3>
         <div className="flex flex-wrap gap-1.5">
           {PORT_PRESETS.map((preset) => {
@@ -316,7 +316,7 @@ function Step3({
       </div>
 
       {/* Ajout manuel */}
-      <div className="card">
+      <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
         <h3 className="text-sm font-semibold text-white mb-3">Ajouter manuellement</h3>
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -346,7 +346,7 @@ function Step3({
 
       {/* List */}
       {ports.length > 0 && (
-        <div className="space-y-2">
+        <div className={`space-y-2 ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
           {ports.map((entry) => (
             <div key={entry.id} className="flex items-center justify-between p-3 bg-bg-elevated border border-bg-border rounded-lg group">
               <div className="flex items-center gap-3 min-w-0">
@@ -700,28 +700,27 @@ export function Config() {
       </div>
 
       {/* Stepper */}
-      <div className="flex items-center mb-8">
-        {steps.map((s, i) => (
-          <div key={s.id} className="flex items-center flex-1 last:flex-none">
-            <button
-              onClick={() => setStep(s.id)}
-              className="flex flex-col items-center gap-1.5 group"
-            >
-              <StepBadge number={s.id} active={step === s.id} />
-              <span className={`text-xs font-medium transition-colors hidden sm:block
-                ${step === s.id ? 'text-white' : step > s.id ? 'text-accent-green' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                {s.label}
-              </span>
-            </button>
-            {i < steps.length - 1 && (
-              <div className="flex-1 mx-2 sm:mx-3 h-px bg-bg-border relative">
-                <div
-                  className="absolute inset-y-0 left-0 bg-accent-green transition-all duration-300"
-                  style={{ width: step > s.id ? '100%' : '0%' }}
-                />
-              </div>
-            )}
-          </div>
+      <div className="relative flex items-start mb-8">
+        {/* Ligne de progression — une seule barre continue reliant les centres des badges */}
+        <div className="absolute top-3.5 left-[12.5%] right-[12.5%] h-px bg-bg-border">
+          <div
+            className="absolute inset-y-0 left-0 bg-accent-green transition-all duration-500 ease-out"
+            style={{ width: `${(Math.min(Math.max(step, 1), steps.length) - 1) / (steps.length - 1) * 100}%` }}
+          />
+        </div>
+
+        {steps.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setStep(s.id)}
+            className="relative z-10 flex-1 flex flex-col items-center gap-1.5 group"
+          >
+            <StepBadge number={s.id} active={step === s.id} />
+            <span className={`text-xs font-medium transition-colors hidden sm:block
+              ${step === s.id ? 'text-white' : step > s.id ? 'text-accent-green' : 'text-slate-500 group-hover:text-slate-300'}`}>
+              {s.label}
+            </span>
+          </button>
         ))}
       </div>
 

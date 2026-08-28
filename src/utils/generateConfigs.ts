@@ -680,7 +680,6 @@ ORDRE D'INSTALLATION
   ÉTAPE 1 — Sur le VPS (connexion SSH) :
     scp setup-vps.sh root@${vpsIp}:/root/
     ssh root@${vpsIp}
-    chmod +x /root/setup-vps.sh
     sudo bash /root/setup-vps.sh
 
   ÉTAPE 2 — Sur le PC local :
@@ -697,7 +696,7 @@ VÉRIFICATION
   Depuis n'importe où :
 ${cfg.openAllPorts
   ? `    nc -zv ${vpsIp} <PORT>  # remplacez <PORT> par le port réellement utilisé (ex: 8000 pour Coolify)`
-  : cfg.ports.map((p) => `    nc -zv ${vpsIp} ${p.port}  # ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
+  : cfg.ports.map((p) => `    nc -zv ${vpsIp} ${String(p.port).padEnd(6)}# ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
 
 DÉPANNAGE
 ---------

@@ -27,18 +27,20 @@ function highlightCode(code: string, language: string): string {
       .replace(/^(\w+)\s*=/gm, '<span class="text-accent-orange">$1</span> =')
   }
   if (language === 'bash' || language === 'sh') {
+    // Le code est déjà échappé (escapeHtml) à ce stade : " et ' sont devenus
+    // &quot;/&#39; — les motifs ci-dessous matchent donc les entités, pas les guillemets bruts.
     return escapeHtml(code)
       .replace(/(^#.*$)/gm, '<span class="text-slate-500 italic">$1</span>')
-      .replace(/(echo\s+"[^"]*")/g, '<span class="text-accent-green">$1</span>')
+      .replace(/(echo(?:\s+-\w+)*\s+&quot;.*?&quot;)/g, '<span class="text-accent-green">$1</span>')
       .replace(/\b(apt|systemctl|sysctl|iptables|wg|wg-quick|netfilter-persistent|cat|chmod|mkdir|set)\b/g, '<span class="text-accent-cyan">$1</span>')
-      .replace(/'[^']*'/g, '<span class="text-accent-orange">$&</span>')
+      .replace(/&#39;.*?&#39;/g, '<span class="text-accent-orange">$&</span>')
   }
   if (language === 'powershell' || language === 'ps1') {
     return escapeHtml(code)
       .replace(/(^#.*$)/gm, '<span class="text-slate-500 italic">$1</span>')
       .replace(/\b(Write-Host|Invoke-WebRequest|Start-Process|Remove-Item|Out-File|Test-Path)\b/g, '<span class="text-accent-cyan">$1</span>')
       .replace(/-ForegroundColor\s+\w+/g, '<span class="text-accent-purple">$&</span>')
-      .replace(/"[^"]*"/g, '<span class="text-accent-green">$&</span>')
+      .replace(/&quot;.*?&quot;/g, '<span class="text-accent-green">$&</span>')
   }
   return escapeHtml(code)
 }

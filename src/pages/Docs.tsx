@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, CheckCircle, ExternalLink, Server, Monitor } from 'lucide-react'
 import { FaWindows } from 'react-icons/fa'
@@ -922,6 +922,28 @@ export function Docs() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
+
+  // Scroll-spy : garde le lien de section surligné synchronisé avec ce qui est
+  // réellement visible à l'écran, pas seulement avec le dernier lien cliqué.
+  useEffect(() => {
+    const elements = sections
+      .map((s) => document.getElementById(s.id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (elements.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting)
+        if (visible.length === 0) return
+        const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b))
+        setActiveSection(topMost.target.id)
+      },
+      { rootMargin: '-100px 0px -70% 0px', threshold: 0 }
+    )
+
+    elements.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [activeOS])
 
   const currentOS = osList.find((o) => o.id === activeOS)!
 

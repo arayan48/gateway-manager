@@ -275,7 +275,7 @@ export function Ports() {
           )}
 
           {/* Presets */}
-          <div className="card">
+          <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="font-bold text-white text-sm">Presets rapides</h2>
@@ -328,7 +328,7 @@ export function Ports() {
           </div>
 
           {/* Ajout manuel */}
-          <div className="card">
+          <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
             <h2 className="font-bold text-white text-sm mb-4">Ajouter un port</h2>
             <div className="space-y-3">
               <div className="flex gap-2">
@@ -385,7 +385,7 @@ export function Ports() {
           <OpenAllPortsToggle id="ports-open-all" checked={openAllPorts} onChange={setOpenAllPorts} />
 
           {/* Port list */}
-          <div className={`card ${openAllPorts ? 'opacity-50' : ''}`}>
+          <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-white text-sm">
                 Ports configurés
