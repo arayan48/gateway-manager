@@ -182,7 +182,7 @@ export function Faq() {
       {/* Items */}
       <div className="space-y-2">
         {filtered.length > 0 ? (
-          filtered.map((item, i) => <FaqAccordion key={i} item={item} />)
+          filtered.map((item) => <FaqAccordion key={item.q} item={item} />)
         ) : (
           <div className="text-center py-10">
             <HelpCircle size={28} className="text-slate-600 mx-auto mb-3" />

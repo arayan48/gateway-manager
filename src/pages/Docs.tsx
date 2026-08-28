@@ -941,7 +941,7 @@ export function Docs() {
           <div className="sticky top-20 space-y-6">
             {/* OS selector */}
             <div>
-              <p className="text-xs text-slate-600 font-mono uppercase tracking-widest mb-2">Système</p>
+              <p className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-2">Système</p>
               <div className="space-y-1">
                 {osList.map((os) => {
                   const Icon = os.icon
@@ -965,7 +965,7 @@ export function Docs() {
 
             {/* Section navigator */}
             <div>
-              <p className="text-xs text-slate-600 font-mono uppercase tracking-widest mb-2">Sections</p>
+              <p className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-2">Sections</p>
               <div className="space-y-1">
                 {sections.map((s) => (
                   <button

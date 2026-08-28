@@ -14,3 +14,13 @@ export function isValidIp(v: string): boolean {
 export function sanitizeLabel(label: string): string {
   return label.replace(/[\r\n`$\\;|&<>]/g, '').slice(0, 60)
 }
+
+/** Port réseau valide : entier compris entre 1 et 65535 */
+export function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535
+}
+
+/** Clé WireGuard valide : 32 octets encodés en base64 (44 caractères, terminés par '=') */
+export function isValidWgKey(v: string): boolean {
+  return /^[A-Za-z0-9+/]{43}=$/.test(v.trim())
+}

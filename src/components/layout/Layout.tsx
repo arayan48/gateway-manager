@@ -45,7 +45,7 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Links */}
             <div>
-              <p className="text-xs text-slate-600 font-mono uppercase tracking-widest mb-3">Navigation</p>
+              <p className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-3">Navigation</p>
               <ul className="space-y-2">
                 {footerLinks.map(({ to, label, icon: Icon }) => (
                   <li key={to}>
@@ -60,7 +60,7 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Info */}
             <div>
-              <p className="text-xs text-slate-600 font-mono uppercase tracking-widest mb-3">Compatibilité</p>
+              <p className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-3">Compatibilité</p>
               <ul className="space-y-1.5 text-xs text-slate-500">
                 <li>Windows 10 / 11 / Server</li>
                 <li>Debian, Ubuntu, Fedora, Alpine, Arch</li>
@@ -71,7 +71,7 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Bottom bar */}
           <div className="border-t border-bg-border py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-xs text-slate-600 font-mono">
+            <p className="text-xs text-slate-500 font-mono">
               &copy; {new Date().getFullYear()} GatewayManager
             </p>
             <div className="flex items-center gap-4">
@@ -87,7 +87,7 @@ export function Layout({ children }: LayoutProps) {
                 href="https://github.com/arayan48"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-slate-600 hover:text-slate-300 transition-colors flex items-center gap-1 text-xs font-mono"
+                className="text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1 text-xs font-mono"
                 aria-label="GitHub"
               >
                 <SiGithub size={14} />

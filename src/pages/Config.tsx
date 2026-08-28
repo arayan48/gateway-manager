@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom'
 import { generateAllFiles } from '../utils/generateConfigs'
 import { exportToZip, exportSingleFile } from '../utils/zipExport'
 
-import { genId, isValidIp } from '../utils/helpers'
+import { genId, isValidIp, isValidWgKey } from '../utils/helpers'
 
 function toBase64(buf: ArrayBuffer): string {
   return btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(''))
@@ -47,8 +47,6 @@ const osOptions: { value: TargetOS; label: string; desc: string; tag: string }[]
   { value: 'linux-arch',    label: 'Arch Linux / Manjaro',   tag: 'pac',   desc: 'Rolling release — commande : pacman -S' },
   { value: 'macos',         label: 'macOS',                  tag: 'brew',  desc: 'macOS 12 Monterey et supérieur — via Homebrew' },
 ]
-
-const isValidWgKey = (v: string) => /^[A-Za-z0-9+/]{43}=$/.test(v.trim())
 
 // ─── Step 1 ─────────────────────────────────────────────────────
 function Step1({
@@ -109,11 +107,11 @@ function Step1({
             setWgPort(!v || v < 1 ? 1 : v > 65535 ? 65535 : v)
           }}
         />
-        <p className="text-xs text-slate-600 mt-1 font-mono">Défaut : 51820/UDP — doit être ouvert sur le VPS</p>
+        <p className="text-xs text-slate-500 mt-1 font-mono">Défaut : 51820/UDP — doit être ouvert sur le VPS</p>
       </div>
       <div>
         <label className="label">OS de votre PC local <span className="text-accent-red">*</span></label>
-        <p className="text-xs text-slate-600 mb-2 font-mono">
+        <p className="text-xs text-slate-500 mb-2 font-mono">
           Votre PC local = la machine derrière le NAT qui héberge vos services (jeux, RDP…).
           Ce choix détermine le script <code className="text-accent-orange">setup-client.sh / .ps1</code> généré.
         </p>
@@ -338,7 +336,7 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
                 </Badge>
                 <span className="text-slate-400 text-sm truncate">{entry.label}</span>
               </div>
-              <button onClick={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} aria-label={`Supprimer le port ${entry.port}`} className="text-slate-600 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0">
+              <button onClick={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} aria-label={`Supprimer le port ${entry.port}`} className="text-slate-500 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -365,8 +363,12 @@ function getConfigWarnings(config: Parameters<typeof generateAllFiles>[0]): stri
     warnings.push('IP publique du VPS manquante ou invalide')
   if (!config.keys.serverPrivateKey || !config.keys.serverPublicKey)
     warnings.push('Clés serveur VPS incomplètes')
+  else if (!isValidWgKey(config.keys.serverPrivateKey) || !isValidWgKey(config.keys.serverPublicKey))
+    warnings.push('Clés serveur VPS invalides — elles seront remplacées par des valeurs placeholder dans les fichiers générés')
   if (!config.keys.clientPrivateKey || !config.keys.clientPublicKey)
     warnings.push('Clés client incomplètes')
+  else if (!isValidWgKey(config.keys.clientPrivateKey) || !isValidWgKey(config.keys.clientPublicKey))
+    warnings.push('Clés client invalides — elles seront remplacées par des valeurs placeholder dans les fichiers générés')
   if (config.ports.length === 0)
     warnings.push('Aucun port configuré — les scripts n\'auront pas de redirections')
   return warnings
@@ -527,7 +529,7 @@ function Step4({
                 </button>
               </div>
               {meta?.hint && (
-                <p className="text-xs text-slate-600 font-mono mb-2">→ {meta.hint}</p>
+                <p className="text-xs text-slate-500 font-mono mb-2">→ {meta.hint}</p>
               )}
               <CodeBlock
                 code={content}
@@ -630,6 +632,11 @@ export function Config() {
           setKeys(k => ({ ...k, clientPublicKey: pubKey }))
         }
       }
+
+      if (!privKey && !pubKey && !addr && !endpoint && !listenPort) {
+        addToast('Fichier .conf illisible — aucun champ WireGuard reconnu', 'error')
+        return
+      }
       addToast('Configuration importée depuis ' + file.name)
     }
     reader.readAsText(file)
@@ -664,7 +671,7 @@ export function Config() {
       </div>
 
       {/* Auto-save indicator */}
-      <div className="flex items-center gap-1.5 text-[11px] text-slate-600 mb-6">
+      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-6">
         <Save size={11} />
         Sauvegarde automatique dans le navigateur
       </div>

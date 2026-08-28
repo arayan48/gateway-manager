@@ -151,7 +151,7 @@ export function Home() {
 
       {/* Compatibility */}
       <div className="flex items-center justify-center gap-8 sm:gap-10">
-        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-600">Compatible</span>
+        <span className="text-[11px] font-mono uppercase tracking-widest text-slate-500">Compatible</span>
         <div className="h-4 w-px bg-bg-border" />
         {compatOs.map(({ icon: Icon, label }) => (
           <div key={label} className="flex items-center gap-2 text-slate-400">

@@ -12,7 +12,7 @@ import { Badge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import type { PortEntry, Protocol } from '../types'
 import { PORT_PRESETS } from '../types'
-import { genId, isValidIp } from '../utils/helpers'
+import { genId, isValidIp, isValidPort } from '../utils/helpers'
 import type { PortOS } from '../utils/portCommands'
 import {
   generateIptablesRules,
@@ -102,54 +102,57 @@ export function Ports() {
 
   // Commandes générées selon l'OS sélectionné
   const resolvedLocalIp = localWgIp || '10.10.0.2'
+  // Filtré une seule fois ici : les fonctions de portCommands.ts n'ont pas
+  // à revalider chaque entrée, elles ne reçoivent que des ports déjà valides.
+  const validPorts = ports.filter((p) => isValidPort(p.port))
 
   const { mainCode, mainTitle, mainFilename, fullCode, fullTitle, fullFilename, verifyCode, verifyFilename, verifyLang } = (() => {
     switch (portOs) {
       case 'linux-vps':
         return {
-          mainCode:     generateIptablesRules(ports, vpsIp, resolvedLocalIp).join('\n'),
+          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp).join('\n'),
           mainTitle:    'Règles iptables individuelles',
           mainFilename: 'iptables — VPS',
-          fullCode:     generateFullBlock(ports, vpsIp, resolvedLocalIp),
+          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — script complet',
-          verifyCode:   generateVerificationCommands(ports, vpsIp).join('\n'),
+          verifyCode:   generateVerificationCommands(validPorts, vpsIp).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'linux-client':
         return {
-          mainCode:     generateLinuxClientRules(ports).join('\n'),
+          mainCode:     generateLinuxClientRules(validPorts).join('\n'),
           mainTitle:    'Règles iptables (PC local Linux)',
           mainFilename: 'iptables — PC local',
-          fullCode:     generateLinuxClientRules(ports).join('\n'),
+          fullCode:     generateLinuxClientRules(validPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — PC local (complet)',
-          verifyCode:   generateLinuxClientVerification(ports, vpsIp).join('\n'),
+          verifyCode:   generateLinuxClientVerification(validPorts, vpsIp).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'windows':
         return {
-          mainCode:     generateWindowsRules(ports).join('\n'),
+          mainCode:     generateWindowsRules(validPorts).join('\n'),
           mainTitle:    'Règles pare-feu Windows (PowerShell)',
           mainFilename: 'PowerShell — New-NetFirewallRule',
-          fullCode:     generateWindowsRules(ports).join('\n'),
+          fullCode:     generateWindowsRules(validPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'PowerShell — complet',
-          verifyCode:   generateWindowsVerification(ports, vpsIp).join('\n'),
+          verifyCode:   generateWindowsVerification(validPorts, vpsIp).join('\n'),
           verifyFilename: 'PowerShell — vérification',
           verifyLang:   'powershell',
         }
       case 'macos':
         return {
-          mainCode:     generateMacOSRules(ports).join('\n'),
+          mainCode:     generateMacOSRules(validPorts).join('\n'),
           mainTitle:    'Règles pfctl (macOS)',
           mainFilename: 'pfctl — /etc/pf.conf',
-          fullCode:     generateMacOSRules(ports).join('\n'),
+          fullCode:     generateMacOSRules(validPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'pfctl — complet',
-          verifyCode:   generateMacOSVerification(ports, vpsIp).join('\n'),
+          verifyCode:   generateMacOSVerification(validPorts, vpsIp).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
@@ -176,7 +179,7 @@ export function Ports() {
           </h1>
           <p className="text-slate-500 text-sm">
             Ajoutez vos ports, choisissez l'OS cible et copiez les commandes générées.
-            <span className="text-slate-600"> Ces ports sont partagés avec le </span>
+            <span className="text-slate-500"> Ces ports sont partagés avec le </span>
             <Link to="/config" className="text-accent-green hover:underline">Générateur de config</Link>.
           </p>
         </div>
@@ -271,7 +274,7 @@ export function Ports() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="font-bold text-white text-sm">Presets rapides</h2>
-                <p className="text-xs text-slate-600 mt-0.5">Cliquez pour activer / désactiver</p>
+                <p className="text-xs text-slate-500 mt-0.5">Cliquez pour activer / désactiver</p>
               </div>
               {(() => {
                 const allAdded = PORT_PRESETS.every(p => ports.some(x => x.port === p.port))
@@ -398,7 +401,7 @@ export function Ports() {
               <div className="text-center py-10">
                 <Layers size={28} className="text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 text-sm">Aucun port configuré</p>
-                <p className="text-slate-600 text-xs mt-1">Ajoutez un preset ou saisissez manuellement</p>
+                <p className="text-slate-500 text-xs mt-1">Ajoutez un preset ou saisissez manuellement</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -419,7 +422,7 @@ export function Ports() {
                     <button
                       onClick={() => removePort(entry.id)}
                       aria-label={`Supprimer le port ${entry.port}`}
-                      className="text-slate-600 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0"
+                      className="text-slate-500 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0"
                     >
                       <Trash2 size={14} />
                     </button>

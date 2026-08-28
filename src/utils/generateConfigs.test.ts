@@ -9,10 +9,10 @@ const baseConfig: ProjectConfig = {
   wireguardPort: 51820,
   targetOS: 'linux-debian',
   keys: {
-    serverPrivateKey: 'sErvErPrIvAtEkEy1234567890abcdefghijklm=',
-    serverPublicKey: 'sErvErPuBlIcKeY1234567890abcdefghijklmn=',
-    clientPrivateKey: 'cLiEnTpRiVaTeKeY1234567890abcdefghijklm=',
-    clientPublicKey: 'cLiEnTpUbLiCkEy1234567890abcdefghijklmn=',
+    serverPrivateKey: 'sErvErPrIvAtEkEy1234567890abcdefghijklmabcd=',
+    serverPublicKey: 'sErvErPuBlIcKeY1234567890abcdefghijklmnabcd=',
+    clientPrivateKey: 'cLiEnTpRiVaTeKeY1234567890abcdefghijklmabcd=',
+    clientPublicKey: 'cLiEnTpUbLiCkEy1234567890abcdefghijklmnabcd=',
   },
   ports: [
     { id: '1', port: 30120, protocol: 'tcp+udp', label: 'FiveM' },
@@ -25,9 +25,9 @@ describe('generateWg0Server', () => {
     const conf = generateWg0Server(baseConfig)
     expect(conf).toContain('[Interface]')
     expect(conf).toContain('[Peer]')
-    expect(conf).toContain('PrivateKey = sErvErPrIvAtEkEy1234567890abcdefghijklm=')
+    expect(conf).toContain('PrivateKey = sErvErPrIvAtEkEy1234567890abcdefghijklmabcd=')
     expect(conf).toContain('ListenPort = 51820')
-    expect(conf).toContain('PublicKey  = cLiEnTpUbLiCkEy1234567890abcdefghijklmn=')
+    expect(conf).toContain('PublicKey  = cLiEnTpUbLiCkEy1234567890abcdefghijklmnabcd=')
     expect(conf).toContain('10.10.0.2/32')
   })
 
@@ -41,7 +41,7 @@ describe('generateWg0Server', () => {
 describe('generateWg0Client', () => {
   it('generates valid client config', () => {
     const conf = generateWg0Client(baseConfig)
-    expect(conf).toContain('PrivateKey = cLiEnTpRiVaTeKeY1234567890abcdefghijklm=')
+    expect(conf).toContain('PrivateKey = cLiEnTpRiVaTeKeY1234567890abcdefghijklmabcd=')
     expect(conf).toContain('Endpoint           = 185.142.21.45:51820')
     expect(conf).toContain('PersistentKeepalive = 25')
   })
@@ -89,5 +89,21 @@ describe('generateAllFiles', () => {
     const vpsScript = files['setup-vps.sh']
     expect(vpsScript).toContain('Projet      : Test rm -rf ')
     expect(vpsScript).not.toContain('Projet      : Test;')
+  })
+
+  it('strips newlines from project name so it cannot break out of the header comment', () => {
+    const files = generateAllFiles({ ...baseConfig, projectName: 'Test\nrm -rf /\necho pwned' })
+    const vpsScript = files['setup-vps.sh']
+    expect(vpsScript).not.toMatch(/\n\s*rm -rf/)
+    expect(vpsScript).toContain('Projet      : Testrm -rf echo pwned')
+  })
+
+  it('replaces malformed WireGuard keys with a placeholder instead of embedding them raw', () => {
+    const files = generateAllFiles({
+      ...baseConfig,
+      keys: { ...baseConfig.keys, serverPrivateKey: "not-a-real-key\nWGEOF\necho pwned" },
+    })
+    expect(files['wg0-server.conf']).toContain('PrivateKey = <SERVER_PRIVATE_KEY>')
+    expect(files['setup-vps.sh']).not.toContain('WGEOF\necho pwned')
   })
 })

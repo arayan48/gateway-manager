@@ -1,5 +1,5 @@
 import type { ProjectConfig, GeneratedFiles } from '../types'
-import { sanitizeLabel } from './helpers'
+import { sanitizeLabel, isValidPort, isValidWgKey } from './helpers'
 
 // Bash ANSI color variable references used in generated shell scripts.
 // Stored as regular JS constants (single-quoted strings) so TypeScript does NOT
@@ -12,13 +12,16 @@ const _C = '${CYAN}'
 const _B = '${BOLD}'
 const _N = '${NC}'
 
-function placeholder(val: string, fallback: string): string {
-  return val.trim() || `<${fallback}>`
+function sanitizeWgKey(val: string, fallback: string): string {
+  const trimmed = val.trim()
+  return trimmed && isValidWgKey(trimmed) ? trimmed : `<${fallback}>`
 }
 
 function escapeBash(str: string): string {
   if (!str || typeof str !== 'string') return ''
-  return str.replace(/[^a-zA-Z0-9\s_-]/g, '').slice(0, 100)
+  // [ ] plutôt que \s : \s inclut \n/\r, ce qui permettrait d'échapper d'un
+  // commentaire bash (le nom de projet est injecté dans l'en-tête du script)
+  return str.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 100)
 }
 
 function sanitizeIp(val: string, fallback: string): string {
@@ -40,6 +43,7 @@ function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
   }
   const rules: string[] = []
   for (const entry of cfg.ports) {
+    if (!isValidPort(entry.port)) continue
     const protos = entry.protocol === 'tcp+udp' ? ['tcp', 'udp'] : [entry.protocol]
     const label = sanitizeLabel(entry.label)
     for (const proto of protos) {
@@ -54,10 +58,10 @@ function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
 // ─── Configs WireGuard ────────────────────────────────────────────────────────
 
 export function generateWg0Server(cfg: ProjectConfig): string {
-  const privKey  = placeholder(cfg.keys.serverPrivateKey, 'SERVER_PRIVATE_KEY')
-  const pubClient = placeholder(cfg.keys.clientPublicKey,  'CLIENT_PUBLIC_KEY')
+  const privKey  = sanitizeWgKey(cfg.keys.serverPrivateKey, 'SERVER_PRIVATE_KEY')
+  const pubClient = sanitizeWgKey(cfg.keys.clientPublicKey,  'CLIENT_PUBLIC_KEY')
   const wgPort   = sanitizePort(cfg.wireguardPort || 51820)
-  const localIp  = placeholder(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
+  const localIp  = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
 
   return `[Interface]
 PrivateKey = ${privKey}
@@ -71,11 +75,11 @@ AllowedIPs = ${localIp}/32
 }
 
 export function generateWg0Client(cfg: ProjectConfig): string {
-  const privKey   = placeholder(cfg.keys.clientPrivateKey, 'CLIENT_PRIVATE_KEY')
-  const pubServer = placeholder(cfg.keys.serverPublicKey,  'SERVER_PUBLIC_KEY')
+  const privKey   = sanitizeWgKey(cfg.keys.clientPrivateKey, 'CLIENT_PRIVATE_KEY')
+  const pubServer = sanitizeWgKey(cfg.keys.serverPublicKey,  'SERVER_PUBLIC_KEY')
   const vpsIp     = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
   const wgPort    = sanitizePort(cfg.wireguardPort || 51820)
-  const localIp   = placeholder(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
+  const localIp   = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
 
   return `[Interface]
 PrivateKey = ${privKey}
