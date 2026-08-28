@@ -6,6 +6,7 @@ import { Toast } from '../components/ui/Toast'
 import { CodeBlock } from '../components/ui/CodeBlock'
 import { Badge, StepBadge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
+import { OpenAllPortsToggle } from '../components/ui/OpenAllPortsToggle'
 import type { PortEntry, Protocol, TargetOS, WireGuardKeys } from '../types'
 import { PORT_PRESETS } from '../types'
 import { Link } from 'react-router-dom'
@@ -254,7 +255,12 @@ function Step2({ keys, setKeys, addToast }: { keys: WireGuardKeys; setKeys: (k: 
 }
 
 // ─── Step 3 ─────────────────────────────────────────────────────
-function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntry[] | ((prev: PortEntry[]) => PortEntry[])) => void }) {
+function Step3({
+  ports, setPorts, openAllPorts, setOpenAllPorts,
+}: {
+  ports: PortEntry[]; setPorts: (p: PortEntry[] | ((prev: PortEntry[]) => PortEntry[])) => void
+  openAllPorts: boolean; setOpenAllPorts: (v: boolean) => void
+}) {
   const { toasts, addToast, removeToast } = useToast()
   const [newPort, setNewPort] = useState('')
   const [newProto, setNewProto] = useState<Protocol>('tcp')
@@ -282,8 +288,11 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
         Ces ports seront inclus dans les scripts générés. Si vous avez déjà configuré des ports dans le Gestionnaire de ports, ils sont pré-chargés ici.
       </NoteBox>
 
+      {/* Mode avancé — ouvrir tous les ports */}
+      <OpenAllPortsToggle id="cfg-open-all-ports" checked={openAllPorts} onChange={setOpenAllPorts} />
+
       {/* Presets */}
-      <div className="card">
+      <div className={`card ${openAllPorts ? 'opacity-50' : ''}`}>
         <h3 className="text-sm font-semibold text-white mb-3">Presets rapides</h3>
         <div className="flex flex-wrap gap-1.5">
           {PORT_PRESETS.map((preset) => {
@@ -380,7 +389,7 @@ function getConfigWarnings(config: Parameters<typeof generateAllFiles>[0]): stri
     warnings.push('Clés client incomplètes')
   else if (!isValidWgKey(config.keys.clientPrivateKey) || !isValidWgKey(config.keys.clientPublicKey))
     warnings.push('Clés client invalides — elles seront remplacées par des valeurs placeholder dans les fichiers générés')
-  if (config.ports.length === 0)
+  if (!config.openAllPorts && config.ports.length === 0)
     warnings.push('Aucun port configuré — les scripts n\'auront pas de redirections')
   return warnings
 }
@@ -463,7 +472,7 @@ function Step4({
           </div>
           <div>
             <div className="text-slate-500">OS / Ports</div>
-            <div className="text-white">{config.targetOS} / {config.ports.length} port(s)</div>
+            <div className="text-white">{config.targetOS} / {config.openAllPorts ? 'tous les ports' : `${config.ports.length} port(s)`}</div>
           </div>
         </div>
       </div>
@@ -581,6 +590,7 @@ export function Config() {
   })
   // Shared with /ports page
   const [ports, setPorts] = useLocalStorage<PortEntry[]>('gm-ports', [])
+  const [openAllPorts, setOpenAllPorts] = useLocalStorage('gm-open-all-ports', false)
 
   const config = {
     projectName,
@@ -590,6 +600,7 @@ export function Config() {
     targetOS,
     keys,
     ports,
+    openAllPorts,
   }
 
   const handleReset = () => {
@@ -601,6 +612,7 @@ export function Config() {
     setTargetOS('linux-debian')
     setKeys({ serverPrivateKey: '', serverPublicKey: '', clientPrivateKey: '', clientPublicKey: '' })
     setPorts([])
+    setOpenAllPorts(false)
     setStep(1)
     addToast('Configuration réinitialisée', 'info')
   }
@@ -726,7 +738,7 @@ export function Config() {
           />
         )}
         {step === 2 && <Step2 keys={keys} setKeys={setKeys} addToast={addToast} />}
-        {step === 3 && <Step3 ports={ports} setPorts={setPorts} />}
+        {step === 3 && <Step3 ports={ports} setPorts={setPorts} openAllPorts={openAllPorts} setOpenAllPorts={setOpenAllPorts} />}
         {step === 4 && <Step4 config={config} addToast={addToast} onGoToStep={setStep} />}
       </div>
 

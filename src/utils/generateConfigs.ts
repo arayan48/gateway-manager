@@ -36,6 +36,14 @@ function sanitizePort(val: number): number {
 
 // ─── Génère les règles iptables pour les scripts (utilise $IFACE) ───────────
 function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
+  if (cfg.openAllPorts) {
+    const rules: string[] = ['# Tous les ports (1-65535) sont redirigés vers le PC local — utile pour les services à ports dynamiques (ex: Coolify)']
+    for (const proto of ['tcp', 'udp']) {
+      rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport 1:65535 -j DNAT --to-destination ${localIp}`)
+      rules.push(`iptables -A FORWARD -p ${proto} -d ${localIp} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)
+    }
+    return rules.join('\n')
+  }
   if (cfg.ports.length === 0) {
     return '# Aucun port configuré — ajoutez vos redirections ici'
   }
@@ -631,9 +639,11 @@ export function generateReadme(cfg: ProjectConfig): string {
     'linux-fedora': 'Fedora/CentOS/RHEL', 'linux-alpine': 'Alpine Linux',
     'linux-arch': 'Arch Linux/Manjaro', macos: 'macOS',
   }
-  const portLines = cfg.ports
-    .map((p) => `  - ${p.label.padEnd(15)} port ${String(p.port).padEnd(6)} ${p.protocol.toUpperCase()}`)
-    .join('\n')
+  const portLines = cfg.openAllPorts
+    ? '  - Tous les ports    1-65535     TCP+UDP  (usage avancé — ex: Coolify)'
+    : cfg.ports
+        .map((p) => `  - ${p.label.padEnd(15)} port ${String(p.port).padEnd(6)} ${p.protocol.toUpperCase()}`)
+        .join('\n')
   const clientScript = cfg.targetOS === 'windows' ? 'setup-client.ps1' : 'setup-client.sh'
 
   return `==============================================================================
@@ -685,7 +695,9 @@ VÉRIFICATION
     iptables -t nat -L PREROUTING -n -v
 
   Depuis n'importe où :
-${cfg.ports.map((p) => `    nc -zv ${vpsIp} ${p.port}  # ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
+${cfg.openAllPorts
+  ? `    nc -zv ${vpsIp} <PORT>  # remplacez <PORT> par le port réellement utilisé (ex: 8000 pour Coolify)`
+  : cfg.ports.map((p) => `    nc -zv ${vpsIp} ${p.port}  # ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
 
 DÉPANNAGE
 ---------

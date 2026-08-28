@@ -31,6 +31,8 @@ export interface ProjectConfig {
   targetOS: TargetOS
   keys: WireGuardKeys
   ports: PortEntry[]
+  /** Redirige tous les ports (1-65535) au lieu de la liste `ports` — utile pour les services à ports dynamiques (ex: Coolify) */
+  openAllPorts: boolean
 }
 
 export interface GeneratedFiles {

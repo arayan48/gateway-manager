@@ -10,6 +10,7 @@ import { Toast } from '../components/ui/Toast'
 import { CodeBlock } from '../components/ui/CodeBlock'
 import { Badge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
+import { OpenAllPortsToggle } from '../components/ui/OpenAllPortsToggle'
 import type { PortEntry, Protocol } from '../types'
 import { PORT_PRESETS } from '../types'
 import { genId, isValidIp, isValidPort } from '../utils/helpers'
@@ -58,6 +59,7 @@ export function Ports() {
   const [vpsIp, setVpsIp] = useLocalStorage('gm-vps-ip', '')
   const [localWgIp, setLocalWgIp] = useLocalStorage('gm-local-wg-ip', '10.10.0.2')
   const [portOs, setPortOs] = useLocalStorage<PortOS>('gm-port-os', 'linux-vps')
+  const [openAllPorts, setOpenAllPorts] = useLocalStorage('gm-open-all-ports', false)
 
   const [newPort, setNewPort] = useState('')
   const [newProto, setNewProto] = useState<Protocol>('tcp')
@@ -110,49 +112,49 @@ export function Ports() {
     switch (portOs) {
       case 'linux-vps':
         return {
-          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp).join('\n'),
+          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp, openAllPorts).join('\n'),
           mainTitle:    'Règles iptables individuelles',
           mainFilename: 'iptables — VPS',
-          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp),
+          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp, openAllPorts),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — script complet',
-          verifyCode:   generateVerificationCommands(validPorts, vpsIp).join('\n'),
+          verifyCode:   generateVerificationCommands(validPorts, vpsIp, openAllPorts).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'linux-client':
         return {
-          mainCode:     generateLinuxClientRules(validPorts).join('\n'),
+          mainCode:     generateLinuxClientRules(validPorts, openAllPorts).join('\n'),
           mainTitle:    'Règles iptables (PC local Linux)',
           mainFilename: 'iptables — PC local',
-          fullCode:     generateLinuxClientRules(validPorts).join('\n'),
+          fullCode:     generateLinuxClientRules(validPorts, openAllPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — PC local (complet)',
-          verifyCode:   generateLinuxClientVerification(validPorts, vpsIp).join('\n'),
+          verifyCode:   generateLinuxClientVerification(validPorts, vpsIp, openAllPorts).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'windows':
         return {
-          mainCode:     generateWindowsRules(validPorts).join('\n'),
+          mainCode:     generateWindowsRules(validPorts, openAllPorts).join('\n'),
           mainTitle:    'Règles pare-feu Windows (PowerShell)',
           mainFilename: 'PowerShell — New-NetFirewallRule',
-          fullCode:     generateWindowsRules(validPorts).join('\n'),
+          fullCode:     generateWindowsRules(validPorts, openAllPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'PowerShell — complet',
-          verifyCode:   generateWindowsVerification(validPorts, vpsIp).join('\n'),
+          verifyCode:   generateWindowsVerification(validPorts, vpsIp, openAllPorts).join('\n'),
           verifyFilename: 'PowerShell — vérification',
           verifyLang:   'powershell',
         }
       case 'macos':
         return {
-          mainCode:     generateMacOSRules(validPorts).join('\n'),
+          mainCode:     generateMacOSRules(validPorts, openAllPorts).join('\n'),
           mainTitle:    'Règles pfctl (macOS)',
           mainFilename: 'pfctl — /etc/pf.conf',
-          fullCode:     generateMacOSRules(validPorts).join('\n'),
+          fullCode:     generateMacOSRules(validPorts, openAllPorts).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'pfctl — complet',
-          verifyCode:   generateMacOSVerification(validPorts, vpsIp).join('\n'),
+          verifyCode:   generateMacOSVerification(validPorts, vpsIp, openAllPorts).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
@@ -379,8 +381,11 @@ export function Ports() {
 
         {/* Right column: list + commands */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Mode avancé — ouvrir tous les ports */}
+          <OpenAllPortsToggle id="ports-open-all" checked={openAllPorts} onChange={setOpenAllPorts} />
+
           {/* Port list */}
-          <div className="card">
+          <div className={`card ${openAllPorts ? 'opacity-50' : ''}`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-white text-sm">
                 Ports configurés
@@ -439,7 +444,7 @@ export function Ports() {
           </div>
 
           {/* Generated commands */}
-          {ports.length > 0 && (
+          {(ports.length > 0 || openAllPorts) && (
             <div className="space-y-4">
               {/* Règles principales */}
               <div className="card">

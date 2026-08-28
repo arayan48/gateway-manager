@@ -18,6 +18,7 @@ const baseConfig: ProjectConfig = {
     { id: '1', port: 30120, protocol: 'tcp+udp', label: 'FiveM' },
     { id: '2', port: 3389, protocol: 'tcp', label: 'RDP' },
   ],
+  openAllPorts: false,
 }
 
 describe('generateWg0Server', () => {
@@ -82,6 +83,14 @@ describe('generateAllFiles', () => {
   it('handles empty ports gracefully', () => {
     const files = generateAllFiles({ ...baseConfig, ports: [] })
     expect(files['setup-vps.sh']).toContain('Aucun port configuré')
+  })
+
+  it('redirects the full port range when openAllPorts is enabled, ignoring the ports list', () => {
+    const files = generateAllFiles({ ...baseConfig, openAllPorts: true })
+    const vpsScript = files['setup-vps.sh']
+    expect(vpsScript).toContain('--dport 1:65535 -j DNAT --to-destination 10.10.0.2')
+    expect(vpsScript).not.toContain('--dport 30120')
+    expect(files['README.txt']).toContain('Tous les ports')
   })
 
   it('sanitizes project name in scripts', () => {
