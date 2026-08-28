@@ -37,7 +37,13 @@ function sanitizePort(val: number): number {
 // ─── Génère les règles iptables pour les scripts (utilise $IFACE) ───────────
 function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
   if (cfg.openAllPorts) {
-    const rules: string[] = ['# Tous les ports (1-65535) sont redirigés vers le PC local — utile pour les services à ports dynamiques (ex: Coolify)']
+    const wgPort = sanitizePort(cfg.wireguardPort || 51820)
+    const rules: string[] = [
+      '# Tous les ports (1-65535) sont redirigés vers le PC local — utile pour les services à ports dynamiques (ex: Coolify)',
+      '# SSH (22) et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter',
+      'iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport 22 -j RETURN',
+      `iptables -t nat -A PREROUTING -i "$IFACE" -p udp --dport ${wgPort} -j RETURN`,
+    ]
     for (const proto of ['tcp', 'udp']) {
       rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport 1:65535 -j DNAT --to-destination ${localIp}`)
       rules.push(`iptables -A FORWARD -p ${proto} -d ${localIp} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)

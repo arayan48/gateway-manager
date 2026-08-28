@@ -60,6 +60,8 @@ export function Ports() {
   const [localWgIp, setLocalWgIp] = useLocalStorage('gm-local-wg-ip', '10.10.0.2')
   const [portOs, setPortOs] = useLocalStorage<PortOS>('gm-port-os', 'linux-vps')
   const [openAllPorts, setOpenAllPorts] = useLocalStorage('gm-open-all-ports', false)
+  // Partagé avec le Générateur de config — nécessaire pour ne jamais rediriger le port WireGuard lui-même
+  const [wgPort] = useLocalStorage('gm-cfg-wgport', 51820)
 
   const [newPort, setNewPort] = useState('')
   const [newProto, setNewProto] = useState<Protocol>('tcp')
@@ -112,10 +114,10 @@ export function Ports() {
     switch (portOs) {
       case 'linux-vps':
         return {
-          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp, openAllPorts).join('\n'),
+          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp, openAllPorts, wgPort).join('\n'),
           mainTitle:    'Règles iptables individuelles',
           mainFilename: 'iptables — VPS',
-          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp, openAllPorts),
+          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp, openAllPorts, wgPort),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — script complet',
           verifyCode:   generateVerificationCommands(validPorts, vpsIp, openAllPorts).join('\n'),

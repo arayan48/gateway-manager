@@ -11,13 +11,17 @@ export function generateIptablesRules(
   ports: PortEntry[],
   _vpsIp: string,
   localWgIp: string,
-  openAll = false
+  openAll = false,
+  wgPort = 51820
 ): string[] {
   const local = localWgIp || '10.10.0.2'
   const rules: string[] = []
 
   if (openAll) {
     rules.push(ALL_PORTS_NOTE)
+    rules.push('# SSH (22) et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter')
+    rules.push(`iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 22 -j RETURN`)
+    rules.push(`iptables -t nat -A PREROUTING -i eth0 -p udp --dport ${wgPort} -j RETURN`)
     for (const proto of ['tcp', 'udp']) {
       rules.push(`iptables -t nat -A PREROUTING -i eth0 -p ${proto} --dport 1:65535 -j DNAT --to-destination ${local}`)
       rules.push(`iptables -A FORWARD -p ${proto} -d ${local} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)
@@ -77,9 +81,10 @@ export function generateFullBlock(
   ports: PortEntry[],
   vpsIp: string,
   localWgIp: string,
-  openAll = false
+  openAll = false,
+  wgPort = 51820
 ): string {
-  return generateIptablesRules(ports, vpsIp, localWgIp, openAll).join('\n')
+  return generateIptablesRules(ports, vpsIp, localWgIp, openAll, wgPort).join('\n')
 }
 
 // ─── Linux PC local — iptables INPUT (autoriser via wg0) ─────────────────────

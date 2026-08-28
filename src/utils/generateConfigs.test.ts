@@ -93,6 +93,18 @@ describe('generateAllFiles', () => {
     expect(files['README.txt']).toContain('Tous les ports')
   })
 
+  it('excludes SSH and the WireGuard listen port from the openAllPorts redirect so the VPS stays reachable', () => {
+    const files = generateAllFiles({ ...baseConfig, openAllPorts: true, wireguardPort: 51820 })
+    const vpsScript = files['setup-vps.sh']
+    const dnatIndex = vpsScript.indexOf('--dport 1:65535 -j DNAT')
+    const sshReturnIndex = vpsScript.indexOf('--dport 22 -j RETURN')
+    const wgReturnIndex = vpsScript.indexOf('--dport 51820 -j RETURN')
+    expect(sshReturnIndex).toBeGreaterThan(-1)
+    expect(wgReturnIndex).toBeGreaterThan(-1)
+    expect(sshReturnIndex).toBeLessThan(dnatIndex)
+    expect(wgReturnIndex).toBeLessThan(dnatIndex)
+  })
+
   it('sanitizes project name in scripts', () => {
     const files = generateAllFiles({ ...baseConfig, projectName: 'Test; rm -rf /' })
     const vpsScript = files['setup-vps.sh']
