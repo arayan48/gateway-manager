@@ -151,7 +151,9 @@ export function Faq() {
       </div>
 
       {/* Search */}
+      <label className="sr-only" htmlFor="faq-search">Rechercher un problème</label>
       <input
+        id="faq-search"
         className="input-field mb-4"
         placeholder="Rechercher un problème..."
         value={search}

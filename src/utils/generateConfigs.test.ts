@@ -98,6 +98,12 @@ describe('generateAllFiles', () => {
     expect(vpsScript).toContain('Projet      : Testrm -rf echo pwned')
   })
 
+  it('replaces an out-of-range IP with a placeholder instead of embedding it raw', () => {
+    const files = generateAllFiles({ ...baseConfig, vpsPublicIp: '999.999.999.999' })
+    expect(files['wg0-client.conf']).toContain('Endpoint           = <VPS_PUBLIC_IP>:51820')
+    expect(files['wg0-client.conf']).not.toContain('999.999.999.999')
+  })
+
   it('replaces malformed WireGuard keys with a placeholder instead of embedding them raw', () => {
     const files = generateAllFiles({
       ...baseConfig,

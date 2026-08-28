@@ -72,7 +72,7 @@ export function Home() {
 
       {/* Diagram */}
       <div className="rounded-2xl border border-bg-border bg-bg-surface p-5 sm:p-8 mb-20 sm:mb-24">
-        <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-6">Comment ca marche</p>
+        <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-6">Comment ça marche</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-center gap-3 sm:gap-0">
           <div className="text-center p-5 rounded-xl border border-bg-border bg-bg-elevated">
@@ -96,7 +96,7 @@ export function Home() {
           <div className="text-center p-5 rounded-xl border border-accent-purple/25 bg-accent-purple/5">
             <Lock size={20} className="text-accent-purple mx-auto mb-2.5" />
             <div className="text-sm font-semibold text-white">WireGuard</div>
-            <div className="text-xs text-slate-500 mt-1">Tunnel chiffre</div>
+            <div className="text-xs text-slate-500 mt-1">Tunnel chiffré</div>
           </div>
 
           <div className="hidden sm:flex justify-center px-1"><ChevronRight size={16} className="text-accent-orange" /></div>
@@ -105,7 +105,7 @@ export function Home() {
           <div className="text-center p-5 rounded-xl border border-accent-orange/25 bg-accent-orange/5">
             <Layers size={20} className="text-accent-orange mx-auto mb-2.5" />
             <div className="text-sm font-semibold text-white">Votre serveur</div>
-            <div className="text-xs text-slate-500 mt-1">Derriere le NAT</div>
+            <div className="text-xs text-slate-500 mt-1">Derrière le NAT</div>
           </div>
         </div>
       </div>

@@ -223,8 +223,9 @@ export function Ports() {
               <h2 className="font-bold text-white text-sm mb-4">Configuration réseau</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="label">IP publique du VPS</label>
+                  <label className="label" htmlFor="ports-vps-ip">IP publique du VPS</label>
                   <input
+                    id="ports-vps-ip"
                     className={`input-field ${vpsIp.trim() !== '' && !isValidIp(vpsIp) ? 'border-red-500 focus:border-red-400' : ''}`}
                     placeholder="ex: 185.142.21.45"
                     value={vpsIp}
@@ -235,8 +236,9 @@ export function Ports() {
                   )}
                 </div>
                 <div>
-                  <label className="label">IP locale WireGuard (client)</label>
+                  <label className="label" htmlFor="ports-local-ip">IP locale WireGuard (client)</label>
                   <input
+                    id="ports-local-ip"
                     className={`input-field ${localWgIp.trim() !== '' && !isValidIp(localWgIp) ? 'border-red-500 focus:border-red-400' : ''}`}
                     placeholder="ex: 10.10.0.2"
                     value={localWgIp}
@@ -255,8 +257,9 @@ export function Ports() {
             <div className="card">
               <h2 className="font-bold text-white text-sm mb-4">IP du VPS (vérification)</h2>
               <div>
-                <label className="label">IP publique du VPS</label>
+                <label className="label" htmlFor="ports-vps-ip-verify">IP publique du VPS</label>
                 <input
+                  id="ports-vps-ip-verify"
                   className={`input-field ${vpsIp.trim() !== '' && !isValidIp(vpsIp) ? 'border-red-500 focus:border-red-400' : ''}`}
                   placeholder="ex: 185.142.21.45"
                   value={vpsIp}
@@ -328,8 +331,9 @@ export function Ports() {
             <div className="space-y-3">
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="label">Port</label>
+                  <label className="label" htmlFor="ports-new-port">Port</label>
                   <input
+                    id="ports-new-port"
                     className="input-field"
                     placeholder="ex: 8080"
                     type="number"
@@ -341,8 +345,9 @@ export function Ports() {
                   />
                 </div>
                 <div className="w-28">
-                  <label className="label">Protocole</label>
+                  <label className="label" htmlFor="ports-new-proto">Protocole</label>
                   <select
+                    id="ports-new-proto"
                     className="input-field"
                     value={newProto}
                     onChange={(e) => setNewProto(e.target.value as Protocol)}
@@ -354,8 +359,9 @@ export function Ports() {
                 </div>
               </div>
               <div>
-                <label className="label">Label (optionnel)</label>
+                <label className="label" htmlFor="ports-new-label">Label (optionnel)</label>
                 <input
+                  id="ports-new-label"
                   className="input-field"
                   placeholder="ex: Mon service"
                   value={newLabel}

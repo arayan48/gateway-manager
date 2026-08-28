@@ -1,5 +1,5 @@
 import type { ProjectConfig, GeneratedFiles } from '../types'
-import { sanitizeLabel, isValidPort, isValidWgKey } from './helpers'
+import { sanitizeLabel, isValidPort, isValidWgKey, isValidIp } from './helpers'
 
 // Bash ANSI color variable references used in generated shell scripts.
 // Stored as regular JS constants (single-quoted strings) so TypeScript does NOT
@@ -26,9 +26,7 @@ function escapeBash(str: string): string {
 
 function sanitizeIp(val: string, fallback: string): string {
   const trimmed = val.trim()
-  if (!trimmed) return `<${fallback}>`
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed)) return `<${fallback}>`
-  return trimmed
+  return trimmed && isValidIp(trimmed) ? trimmed : `<${fallback}>`
 }
 
 function sanitizePort(val: number): number {

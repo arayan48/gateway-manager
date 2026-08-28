@@ -64,17 +64,26 @@ function Step1({
 }) {
   const vpsIpInvalid  = vpsIp.trim()     !== '' && !isValidIp(vpsIp)
   const localIpInvalid = localWgIp.trim() !== '' && !isValidIp(localWgIp)
+  const [wgPortInput, setWgPortInput] = useState(String(wgPort))
+
+  const commitWgPort = () => {
+    const v = parseInt(wgPortInput)
+    const clamped = !v || v < 1 ? 1 : v > 65535 ? 65535 : v
+    setWgPort(clamped)
+    setWgPortInput(String(clamped))
+  }
 
   return (
     <div className="space-y-5">
       <div>
-        <label className="label">Nom du projet / serveur</label>
-        <input className="input-field" placeholder="ex: Mon Serveur FiveM" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+        <label className="label" htmlFor="cfg-project-name">Nom du projet / serveur</label>
+        <input id="cfg-project-name" className="input-field" placeholder="ex: Mon Serveur FiveM" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="label">IP publique du VPS <span className="text-accent-red">*</span></label>
+          <label className="label" htmlFor="cfg-vps-ip">IP publique du VPS <span className="text-accent-red">*</span></label>
           <input
+            id="cfg-vps-ip"
             className={`input-field ${vpsIpInvalid ? 'border-red-500 focus:border-red-400' : ''}`}
             placeholder="ex: 185.142.21.45"
             value={vpsIp}
@@ -83,8 +92,9 @@ function Step1({
           {vpsIpInvalid && <p className="text-xs text-red-400 mt-1 font-mono">Format invalide — ex: 185.142.21.45</p>}
         </div>
         <div>
-          <label className="label">IP locale WireGuard (client)</label>
+          <label className="label" htmlFor="cfg-local-ip">IP locale WireGuard (client)</label>
           <input
+            id="cfg-local-ip"
             className={`input-field ${localIpInvalid ? 'border-red-500 focus:border-red-400' : ''}`}
             placeholder="10.10.0.2"
             value={localWgIp}
@@ -94,18 +104,17 @@ function Step1({
         </div>
       </div>
       <div>
-        <label className="label">Port WireGuard</label>
+        <label className="label" htmlFor="cfg-wg-port">Port WireGuard</label>
         <input
+          id="cfg-wg-port"
           className="input-field w-40"
           type="number"
           placeholder="51820"
           min={1}
           max={65535}
-          value={wgPort}
-          onChange={(e) => {
-            const v = parseInt(e.target.value)
-            setWgPort(!v || v < 1 ? 1 : v > 65535 ? 65535 : v)
-          }}
+          value={wgPortInput}
+          onChange={(e) => setWgPortInput(e.target.value)}
+          onBlur={commitWgPort}
         />
         <p className="text-xs text-slate-500 mt-1 font-mono">Défaut : 51820/UDP — doit être ouvert sur le VPS</p>
       </div>
@@ -143,8 +152,9 @@ function Step1({
 
 // ─── Step 2 ─────────────────────────────────────────────────────
 function KeyField({
-  label, isPrivate, value, onChange, showPrivate, onTogglePrivate,
+  id, label, isPrivate, value, onChange, showPrivate, onTogglePrivate,
 }: {
+  id: string
   label: string
   isPrivate?: boolean
   value: string
@@ -155,9 +165,10 @@ function KeyField({
   const invalid = value.trim() !== '' && !isValidWgKey(value)
   return (
     <div>
-      <label className="label">{label}</label>
+      <label className="label" htmlFor={id}>{label}</label>
       <div className="relative">
         <input
+          id={id}
           className={`input-field pr-10 ${invalid ? 'border-red-500 focus:border-red-400' : ''}`}
           type={isPrivate && !showPrivate ? 'password' : 'text'}
           placeholder="Base64 44 caractères"
@@ -229,14 +240,14 @@ function Step2({ keys, setKeys, addToast }: { keys: WireGuardKeys; setKeys: (k: 
 
       <div className="border border-bg-border rounded-lg p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-300">Serveur VPS</h3>
-        <KeyField label="Clé privée VPS" isPrivate value={keys.serverPrivateKey} onChange={(v) => setKeys({ ...keys, serverPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
-        <KeyField label="Clé publique VPS" value={keys.serverPublicKey} onChange={(v) => setKeys({ ...keys, serverPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField id="cfg-key-server-priv" label="Clé privée VPS" isPrivate value={keys.serverPrivateKey} onChange={(v) => setKeys({ ...keys, serverPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField id="cfg-key-server-pub" label="Clé publique VPS" value={keys.serverPublicKey} onChange={(v) => setKeys({ ...keys, serverPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
       </div>
 
       <div className="border border-bg-border rounded-lg p-4 space-y-4">
         <h3 className="text-sm font-semibold text-slate-300">Client (serveur distant)</h3>
-        <KeyField label="Clé privée client" isPrivate value={keys.clientPrivateKey} onChange={(v) => setKeys({ ...keys, clientPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
-        <KeyField label="Clé publique client" value={keys.clientPublicKey} onChange={(v) => setKeys({ ...keys, clientPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField id="cfg-key-client-priv" label="Clé privée client" isPrivate value={keys.clientPrivateKey} onChange={(v) => setKeys({ ...keys, clientPrivateKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
+        <KeyField id="cfg-key-client-pub" label="Clé publique client" value={keys.clientPublicKey} onChange={(v) => setKeys({ ...keys, clientPublicKey: v })} showPrivate={showPrivate} onTogglePrivate={toggle} />
       </div>
     </div>
   )
@@ -301,20 +312,20 @@ function Step3({ ports, setPorts }: { ports: PortEntry[]; setPorts: (p: PortEntr
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div>
-              <label className="label">Port</label>
-              <input className="input-field" type="number" placeholder="8080" value={newPort} onChange={(e) => setNewPort(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
+              <label className="label" htmlFor="cfg-step3-port">Port</label>
+              <input id="cfg-step3-port" className="input-field" type="number" placeholder="8080" value={newPort} onChange={(e) => setNewPort(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
             </div>
             <div>
-              <label className="label">Protocole</label>
-              <select className="input-field" value={newProto} onChange={(e) => setNewProto(e.target.value as Protocol)}>
+              <label className="label" htmlFor="cfg-step3-proto">Protocole</label>
+              <select id="cfg-step3-proto" className="input-field" value={newProto} onChange={(e) => setNewProto(e.target.value as Protocol)}>
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
                 <option value="tcp+udp">TCP+UDP</option>
               </select>
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <label className="label">Label</label>
-              <input className="input-field" placeholder="Mon service" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
+              <label className="label" htmlFor="cfg-step3-label">Label</label>
+              <input id="cfg-step3-label" className="input-field" placeholder="Mon service" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
             </div>
           </div>
           <button onClick={addPort} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1">
