@@ -2,9 +2,35 @@ export type Protocol = 'tcp' | 'udp' | 'tcp+udp'
 
 export interface PortEntry {
   id: string
+  /** Port public (côté VPS) — premier port de la plage si `endPort` est défini */
   port: number
   protocol: Protocol
   label: string
+  /** Dernier port d'une plage (ex: 27015-27030) — la plage est redirigée à l'identique */
+  endPort?: number
+  /** Port sur le PC local s'il diffère du port public (ex: 2222 → 22) — ignoré pour une plage */
+  targetPort?: number
+  /** IPs / réseaux autorisés (ex: "203.0.113.4, 198.51.100.0/24") — vide = tout internet */
+  allowedSources?: string
+}
+
+export interface AdvancedOptions {
+  /**
+   * Les services du PC local voient l'IP réelle des visiteurs au lieu de celle du VPS.
+   * Linux : routage par marquage de connexion (seules les réponses repassent par le tunnel).
+   * Windows / macOS : tunnel complet (tout le trafic sortant du PC passe par le VPS).
+   */
+  preserveClientIp: boolean
+  /** MTU du tunnel — null = automatique (1420 par défaut dans WireGuard) */
+  mtu: number | null
+  /** Intervalle de keepalive côté client, en secondes (maintient le NAT de la box ouvert) */
+  keepalive: number
+}
+
+export const DEFAULT_OPTIONS: AdvancedOptions = {
+  preserveClientIp: true,
+  mtu: null,
+  keepalive: 25,
 }
 
 export type TargetOS =
@@ -33,6 +59,7 @@ export interface ProjectConfig {
   ports: PortEntry[]
   /** Redirige tous les ports (1-65535) au lieu de la liste `ports` — utile pour les services à ports dynamiques (ex: Coolify) */
   openAllPorts: boolean
+  options: AdvancedOptions
 }
 
 export interface GeneratedFiles {
@@ -41,6 +68,7 @@ export interface GeneratedFiles {
   'setup-vps.sh': string
   'setup-client.sh'?: string
   'setup-client.ps1'?: string
+  'uninstall-vps.sh': string
   'README.txt': string
 }
 

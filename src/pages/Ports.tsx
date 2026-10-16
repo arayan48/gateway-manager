@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, Layers, Terminal, X, Server, ArrowRight } from 'lucide-react'
+import { Layers, Terminal, X, Server, ArrowRight } from 'lucide-react'
 import { FaWindows } from 'react-icons/fa'
 import { SiLinux, SiApple } from 'react-icons/si'
 import type { IconType } from 'react-icons'
@@ -8,17 +7,19 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/ui/Toast'
 import { CodeBlock } from '../components/ui/CodeBlock'
-import { Badge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import { OpenAllPortsToggle } from '../components/ui/OpenAllPortsToggle'
-import type { PortEntry, Protocol } from '../types'
-import { PORT_PRESETS } from '../types'
-import { genId, isValidIp, isValidPort } from '../utils/helpers'
-import type { PortOS } from '../utils/portCommands'
+import { PreserveIpToggle } from '../components/ui/PreserveIpToggle'
+import { AddPortForm } from '../components/ports/AddPortForm'
+import { PortRow } from '../components/ports/PortRow'
+import type { AdvancedOptions, PortEntry } from '../types'
+import { DEFAULT_OPTIONS, PORT_PRESETS } from '../types'
+import { genId, isValidIp, describePortEntry } from '../utils/helpers'
+import type { PortOS, PortCommandInput } from '../utils/portCommands'
 import {
-  generateIptablesRules,
+  generateVpsCommands,
+  generateVpsRemoveCommands,
   generateVerificationCommands,
-  generateFullBlock,
   generateLinuxClientRules,
   generateLinuxClientVerification,
   generateWindowsRules,
@@ -37,7 +38,7 @@ const OS_OPTIONS: { value: PortOS; label: string; sublabel: string; icon: IconTy
 const OS_NOTE: Record<PortOS, { type: 'info' | 'warn'; text: string }> = {
   'linux-vps': {
     type: 'info',
-    text: 'Ces commandes sont à exécuter sur le VPS. Remplacez eth0 par le nom de votre interface réseau principale si nécessaire (détectable avec : ip route get 8.8.8.8).',
+    text: 'À coller sur le VPS (en root), d\'un seul bloc : l\'interface publique (eth0, ens3, ens6…) est détectée automatiquement. Les règles vivent dans des chaînes dédiées GM_* : recoller le bloc remplace l\'ancienne version sans doublon, et Docker / ufw ne sont pas touchés. Elles ne survivent pas à un redémarrage — pour une installation permanente, utilisez setup-vps.sh du Générateur de config.',
   },
   'linux-client': {
     type: 'info',
@@ -60,30 +61,15 @@ export function Ports() {
   const [localWgIp, setLocalWgIp] = useLocalStorage('gm-local-wg-ip', '10.10.0.2')
   const [portOs, setPortOs] = useLocalStorage<PortOS>('gm-port-os', 'linux-vps')
   const [openAllPorts, setOpenAllPorts] = useLocalStorage('gm-open-all-ports', false)
-  // Partagé avec le Générateur de config — nécessaire pour ne jamais rediriger le port WireGuard lui-même
+  // Partagés avec le Générateur de config — le port WireGuard ne doit jamais être redirigé
   const [wgPort] = useLocalStorage('gm-cfg-wgport', 51820)
+  const [storedOptions, setOptions] = useLocalStorage<AdvancedOptions>('gm-cfg-options', DEFAULT_OPTIONS)
+  const options = { ...DEFAULT_OPTIONS, ...storedOptions }
+  const setPreserveClientIp = (v: boolean) => setOptions((o) => ({ ...DEFAULT_OPTIONS, ...o, preserveClientIp: v }))
 
-  const [newPort, setNewPort] = useState('')
-  const [newProto, setNewProto] = useState<Protocol>('tcp')
-  const [newLabel, setNewLabel] = useState('')
-
-  const addPort = () => {
-    const p = parseInt(newPort)
-    if (!p || p < 1 || p > 65535) {
-      addToast('Port invalide (1-65535)', 'error')
-      return
-    }
-    if (ports.some((x) => x.port === p && x.protocol === newProto)) {
-      addToast('Ce port/protocole existe déjà', 'error')
-      return
-    }
-    setPorts((prev) => [
-      ...prev,
-      { id: genId(), port: p, protocol: newProto, label: newLabel || `Port ${p}` },
-    ])
-    setNewPort('')
-    setNewLabel('')
-    addToast(`Port ${p} ajouté`)
+  const addPort = (entry: PortEntry) => {
+    setPorts((prev) => [...prev, entry])
+    addToast(`${describePortEntry(entry)} ajouté`)
   }
 
   const removePort = (id: string) => {
@@ -105,58 +91,62 @@ export function Ports() {
   }
 
   // Commandes générées selon l'OS sélectionné
-  const resolvedLocalIp = localWgIp || '10.10.0.2'
-  // Filtré une seule fois ici : les fonctions de portCommands.ts n'ont pas
-  // à revalider chaque entrée, elles ne reçoivent que des ports déjà valides.
-  const validPorts = ports.filter((p) => isValidPort(p.port))
+  const input: PortCommandInput = {
+    ports,
+    vpsIp,
+    localWgIp: localWgIp || '10.10.0.2',
+    openAll: openAllPorts,
+    wgPort,
+    preserveClientIp: options.preserveClientIp,
+  }
 
   const { mainCode, mainTitle, mainFilename, fullCode, fullTitle, fullFilename, verifyCode, verifyFilename, verifyLang } = (() => {
     switch (portOs) {
       case 'linux-vps':
         return {
-          mainCode:     generateIptablesRules(validPorts, vpsIp, resolvedLocalIp, openAllPorts, wgPort).join('\n'),
-          mainTitle:    'Règles iptables individuelles',
+          mainCode:     generateVpsCommands(input).join('\n'),
+          mainTitle:    'Règles iptables — bloc à coller sur le VPS',
           mainFilename: 'iptables — VPS',
-          fullCode:     generateFullBlock(validPorts, vpsIp, resolvedLocalIp, openAllPorts, wgPort),
-          fullTitle:    'Bloc complet à copier-coller',
-          fullFilename: 'iptables — script complet',
-          verifyCode:   generateVerificationCommands(validPorts, vpsIp, openAllPorts).join('\n'),
+          fullCode:     generateVpsRemoveCommands().join('\n'),
+          fullTitle:    'Retirer les règles',
+          fullFilename: 'iptables — suppression',
+          verifyCode:   generateVerificationCommands(input).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'linux-client':
         return {
-          mainCode:     generateLinuxClientRules(validPorts, openAllPorts).join('\n'),
+          mainCode:     generateLinuxClientRules(input).join('\n'),
           mainTitle:    'Règles iptables (PC local Linux)',
           mainFilename: 'iptables — PC local',
-          fullCode:     generateLinuxClientRules(validPorts, openAllPorts).join('\n'),
+          fullCode:     generateLinuxClientRules(input).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'iptables — PC local (complet)',
-          verifyCode:   generateLinuxClientVerification(validPorts, vpsIp, openAllPorts).join('\n'),
+          verifyCode:   generateLinuxClientVerification(input).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
       case 'windows':
         return {
-          mainCode:     generateWindowsRules(validPorts, openAllPorts).join('\n'),
+          mainCode:     generateWindowsRules(input).join('\n'),
           mainTitle:    'Règles pare-feu Windows (PowerShell)',
           mainFilename: 'PowerShell — New-NetFirewallRule',
-          fullCode:     generateWindowsRules(validPorts, openAllPorts).join('\n'),
+          fullCode:     generateWindowsRules(input).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'PowerShell — complet',
-          verifyCode:   generateWindowsVerification(validPorts, vpsIp, openAllPorts).join('\n'),
+          verifyCode:   generateWindowsVerification(input).join('\n'),
           verifyFilename: 'PowerShell — vérification',
           verifyLang:   'powershell',
         }
       case 'macos':
         return {
-          mainCode:     generateMacOSRules(validPorts, openAllPorts).join('\n'),
+          mainCode:     generateMacOSRules(input).join('\n'),
           mainTitle:    'Règles pfctl (macOS)',
           mainFilename: 'pfctl — /etc/pf.conf',
-          fullCode:     generateMacOSRules(validPorts, openAllPorts).join('\n'),
+          fullCode:     generateMacOSRules(input).join('\n'),
           fullTitle:    'Bloc complet à copier-coller',
           fullFilename: 'pfctl — complet',
-          verifyCode:   generateMacOSVerification(validPorts, vpsIp, openAllPorts).join('\n'),
+          verifyCode:   generateMacOSVerification(input).join('\n'),
           verifyFilename: 'bash — vérification',
           verifyLang:   'bash',
         }
@@ -165,11 +155,6 @@ export function Ports() {
 
   const note = OS_NOTE[portOs]
 
-  const protoColors: Record<Protocol, 'green' | 'cyan' | 'orange'> = {
-    tcp: 'cyan',
-    udp: 'orange',
-    'tcp+udp': 'green',
-  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
@@ -332,52 +317,12 @@ export function Ports() {
           {/* Ajout manuel */}
           <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
             <h2 className="font-bold text-white text-sm mb-4">Ajouter un port</h2>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="label" htmlFor="ports-new-port">Port</label>
-                  <input
-                    id="ports-new-port"
-                    className="input-field"
-                    placeholder="ex: 8080"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={newPort}
-                    onChange={(e) => setNewPort(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addPort()}
-                  />
-                </div>
-                <div className="w-28">
-                  <label className="label" htmlFor="ports-new-proto">Protocole</label>
-                  <select
-                    id="ports-new-proto"
-                    className="input-field"
-                    value={newProto}
-                    onChange={(e) => setNewProto(e.target.value as Protocol)}
-                  >
-                    <option value="tcp">TCP</option>
-                    <option value="udp">UDP</option>
-                    <option value="tcp+udp">TCP+UDP</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="label" htmlFor="ports-new-label">Label (optionnel)</label>
-                <input
-                  id="ports-new-label"
-                  className="input-field"
-                  placeholder="ex: Mon service"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addPort()}
-                />
-              </div>
-              <button onClick={addPort} className="btn-primary w-full flex items-center justify-center gap-2">
-                <Plus size={14} />
-                Ajouter le port
-              </button>
-            </div>
+            <AddPortForm
+              idPrefix="ports-new"
+              existing={ports}
+              onAdd={addPort}
+              onError={(m) => addToast(m, 'error')}
+            />
           </div>
         </div>
 
@@ -385,6 +330,12 @@ export function Ports() {
         <div className="lg:col-span-2 space-y-4">
           {/* Mode avancé — ouvrir tous les ports */}
           <OpenAllPortsToggle id="ports-open-all" checked={openAllPorts} onChange={setOpenAllPorts} />
+          <PreserveIpToggle
+            id="ports-preserve-ip"
+            checked={options.preserveClientIp}
+            onChange={setPreserveClientIp}
+            clientOs={portOs === 'windows' ? 'windows' : portOs === 'macos' ? 'macos' : 'linux'}
+          />
 
           {/* Port list */}
           <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -419,27 +370,7 @@ export function Ports() {
             ) : (
               <div className="space-y-2">
                 {ports.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-bg-border/80 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-white font-semibold w-12 text-right">
-                        {entry.port}
-                      </span>
-                      <Badge variant={protoColors[entry.protocol]}>
-                        {entry.protocol.toUpperCase()}
-                      </Badge>
-                      <span className="text-slate-400 text-sm">{entry.label}</span>
-                    </div>
-                    <button
-                      onClick={() => removePort(entry.id)}
-                      aria-label={`Supprimer le port ${entry.port}`}
-                      className="text-slate-500 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <PortRow key={entry.id} entry={entry} onRemove={() => removePort(entry.id)} />
                 ))}
               </div>
             )}
