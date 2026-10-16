@@ -1,19 +1,22 @@
 import { useState, useCallback } from 'react'
-import { ChevronRight, ChevronLeft, Download, Eye, EyeOff, Shuffle, Plus, Trash2, RotateCcw, Upload, AlertTriangle, Save } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Download, Eye, EyeOff, Shuffle, RotateCcw, Upload, AlertTriangle, Save, Activity } from 'lucide-react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/ui/Toast'
 import { CodeBlock } from '../components/ui/CodeBlock'
-import { Badge, StepBadge } from '../components/ui/Badge'
+import { StepBadge } from '../components/ui/Badge'
 import { NoteBox } from '../components/ui/NoteBox'
 import { OpenAllPortsToggle } from '../components/ui/OpenAllPortsToggle'
-import type { PortEntry, Protocol, TargetOS, WireGuardKeys } from '../types'
-import { PORT_PRESETS } from '../types'
+import { PreserveIpToggle } from '../components/ui/PreserveIpToggle'
+import { AddPortForm } from '../components/ports/AddPortForm'
+import { PortRow } from '../components/ports/PortRow'
+import type { AdvancedOptions, PortEntry, TargetOS, WireGuardKeys } from '../types'
+import { DEFAULT_OPTIONS, PORT_PRESETS } from '../types'
 import { Link } from 'react-router-dom'
-import { generateAllFiles } from '../utils/generateConfigs'
+import { generateAllFiles, usesFullTunnel } from '../utils/generateConfigs'
 import { exportToZip, exportSingleFile } from '../utils/zipExport'
 
-import { genId, isValidIp, isValidWgKey } from '../utils/helpers'
+import { genId, isValidIp, isValidWgKey, describePortEntry } from '../utils/helpers'
 
 function toBase64(buf: ArrayBuffer): string {
   return btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(''))
@@ -56,16 +59,33 @@ function Step1({
   localWgIp, setLocalWgIp,
   wgPort, setWgPort,
   targetOS, setTargetOS,
+  options, setOptions,
 }: {
   projectName: string; setProjectName: (v: string) => void
   vpsIp: string; setVpsIp: (v: string) => void
   localWgIp: string; setLocalWgIp: (v: string) => void
   wgPort: number; setWgPort: (v: number) => void
   targetOS: TargetOS; setTargetOS: (v: TargetOS) => void
+  options: AdvancedOptions; setOptions: (v: AdvancedOptions) => void
 }) {
   const vpsIpInvalid  = vpsIp.trim()     !== '' && !isValidIp(vpsIp)
   const localIpInvalid = localWgIp.trim() !== '' && !isValidIp(localWgIp)
   const [wgPortInput, setWgPortInput] = useState(String(wgPort))
+
+  const [mtuInput, setMtuInput] = useState(options.mtu === null ? '' : String(options.mtu))
+  const [keepaliveInput, setKeepaliveInput] = useState(String(options.keepalive))
+  const mtuInvalid = mtuInput.trim() !== '' && !(Number.isInteger(Number(mtuInput)) && Number(mtuInput) >= 1280 && Number(mtuInput) <= 1500)
+
+  const commitMtu = () => {
+    if (mtuInput.trim() === '') return setOptions({ ...options, mtu: null })
+    if (!mtuInvalid) setOptions({ ...options, mtu: Number(mtuInput) })
+  }
+  const commitKeepalive = () => {
+    const v = parseInt(keepaliveInput)
+    const clamped = Number.isNaN(v) || v < 0 ? 0 : v > 600 ? 600 : v
+    setOptions({ ...options, keepalive: clamped })
+    setKeepaliveInput(String(clamped))
+  }
 
   const commitWgPort = () => {
     const v = parseInt(wgPortInput)
@@ -145,6 +165,49 @@ function Step1({
               <div className="text-xs text-slate-500 mt-1 leading-relaxed">{os.desc}</div>
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="space-y-3 pt-2">
+        <h3 className="text-sm font-semibold text-white">Options avancées</h3>
+        <PreserveIpToggle
+          id="cfg-preserve-ip"
+          checked={options.preserveClientIp}
+          onChange={(v) => setOptions({ ...options, preserveClientIp: v })}
+          clientOs={targetOS === 'windows' ? 'windows' : targetOS === 'macos' ? 'macos' : 'linux'}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="label" htmlFor="cfg-mtu">MTU du tunnel</label>
+            <input
+              id="cfg-mtu"
+              className={`input-field ${mtuInvalid ? 'border-red-500 focus:border-red-400' : ''}`}
+              type="number"
+              placeholder="auto (1420)"
+              min={1280}
+              max={1500}
+              value={mtuInput}
+              onChange={(e) => setMtuInput(e.target.value)}
+              onBlur={commitMtu}
+            />
+            <p className={`text-xs mt-1 font-mono ${mtuInvalid ? 'text-red-400' : 'text-slate-500'}`}>
+              {mtuInvalid ? 'Entre 1280 et 1500, ou vide pour automatique' : 'Essayez 1380 si des connexions se figent (4G, fibre PPPoE, DS-Lite)'}
+            </p>
+          </div>
+          <div>
+            <label className="label" htmlFor="cfg-keepalive">Keepalive (secondes)</label>
+            <input
+              id="cfg-keepalive"
+              className="input-field"
+              type="number"
+              min={0}
+              max={600}
+              value={keepaliveInput}
+              onChange={(e) => setKeepaliveInput(e.target.value)}
+              onBlur={commitKeepalive}
+            />
+            <p className="text-xs text-slate-500 mt-1 font-mono">Garde le tunnel ouvert à travers la box — 25 recommandé, 0 = désactivé</p>
+          </div>
         </div>
       </div>
     </div>
@@ -262,17 +325,10 @@ function Step3({
   openAllPorts: boolean; setOpenAllPorts: (v: boolean) => void
 }) {
   const { toasts, addToast, removeToast } = useToast()
-  const [newPort, setNewPort] = useState('')
-  const [newProto, setNewProto] = useState<Protocol>('tcp')
-  const [newLabel, setNewLabel] = useState('')
 
-  const addPort = () => {
-    const p = parseInt(newPort)
-    if (!p || p < 1 || p > 65535) { addToast('Port invalide', 'error'); return }
-    if (ports.some((x) => x.port === p)) { addToast('Port déjà ajouté', 'info'); return }
-    setPorts((prev) => [...prev, { id: genId(), port: p, protocol: newProto, label: newLabel || `Port ${p}` }])
-    setNewPort(''); setNewLabel('')
-    addToast(`Port ${p} ajouté`)
+  const addPort = (entry: PortEntry) => {
+    setPorts((prev) => [...prev, entry])
+    addToast(`${describePortEntry(entry)} ajouté`)
   }
 
   const addPreset = (preset: typeof PORT_PRESETS[0]) => {
@@ -318,48 +374,14 @@ function Step3({
       {/* Ajout manuel */}
       <div className={`card ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
         <h3 className="text-sm font-semibold text-white mb-3">Ajouter manuellement</h3>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <div>
-              <label className="label" htmlFor="cfg-step3-port">Port</label>
-              <input id="cfg-step3-port" className="input-field" type="number" placeholder="8080" value={newPort} onChange={(e) => setNewPort(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
-            </div>
-            <div>
-              <label className="label" htmlFor="cfg-step3-proto">Protocole</label>
-              <select id="cfg-step3-proto" className="input-field" value={newProto} onChange={(e) => setNewProto(e.target.value as Protocol)}>
-                <option value="tcp">TCP</option>
-                <option value="udp">UDP</option>
-                <option value="tcp+udp">TCP+UDP</option>
-              </select>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="label" htmlFor="cfg-step3-label">Label</label>
-              <input id="cfg-step3-label" className="input-field" placeholder="Mon service" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addPort()} />
-            </div>
-          </div>
-          <button onClick={addPort} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1">
-            <Plus size={13} />
-            Ajouter
-          </button>
-        </div>
+        <AddPortForm idPrefix="cfg-step3" existing={ports} onAdd={addPort} onError={(m) => addToast(m, 'error')} />
       </div>
 
       {/* List */}
       {ports.length > 0 && (
         <div className={`space-y-2 ${openAllPorts ? 'opacity-50 pointer-events-none' : ''}`}>
           {ports.map((entry) => (
-            <div key={entry.id} className="flex items-center justify-between p-3 bg-bg-elevated border border-bg-border rounded-lg group">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-sm text-white w-10 text-right shrink-0">{entry.port}</span>
-                <Badge variant={entry.protocol === 'tcp' ? 'cyan' : entry.protocol === 'udp' ? 'orange' : 'green'}>
-                  {entry.protocol.toUpperCase()}
-                </Badge>
-                <span className="text-slate-400 text-sm truncate">{entry.label}</span>
-              </div>
-              <button onClick={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} aria-label={`Supprimer le port ${entry.port}`} className="text-slate-500 hover:text-accent-red transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1 shrink-0">
-                <Trash2 size={14} />
-              </button>
-            </div>
+            <PortRow key={entry.id} entry={entry} onRemove={() => setPorts((p) => p.filter((x) => x.id !== entry.id))} />
           ))}
         </div>
       )}
@@ -371,7 +393,8 @@ const fileMeta: Record<string, { machine: string; color: string; hint: string }>
   'setup-vps.sh':     { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Exécuter sur le VPS (SSH)' },
   'setup-client.sh':  { machine: 'PC Local', color: 'text-accent-orange', hint: 'Exécuter sur votre PC local' },
   'setup-client.ps1': { machine: 'PC Local', color: 'text-accent-orange', hint: 'PowerShell Admin sur votre PC' },
-  'wg0-server.conf':  { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Config WireGuard du VPS' },
+  'uninstall-vps.sh': { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Retire tout ce que GatewayManager a installé sur le VPS (Docker / ufw intacts)' },
+  'wg0-server.conf':  { machine: 'VPS',      color: 'text-accent-cyan',   hint: 'Config WireGuard du VPS (installée par setup-vps.sh)' },
   'wg0-client.conf':  { machine: 'PC Local', color: 'text-accent-orange', hint: 'Config WireGuard du PC local' },
   'README.txt':       { machine: 'Lisez-moi',color: 'text-slate-400',     hint: 'Instructions d\'installation' },
 }
@@ -410,7 +433,7 @@ function Step4({
 
   const langMap: Record<string, string> = {
     'wg0-server.conf': 'ini', 'wg0-client.conf': 'ini',
-    'setup-vps.sh': 'bash', 'setup-client.sh': 'bash',
+    'setup-vps.sh': 'bash', 'setup-client.sh': 'bash', 'uninstall-vps.sh': 'bash',
     'setup-client.ps1': 'powershell', 'README.txt': 'bash',
   }
 
@@ -457,7 +480,7 @@ function Step4({
       {/* Config summary */}
       <div className="rounded-xl border border-bg-border bg-bg-elevated p-4">
         <p className="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-3">Récapitulatif</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
           <div>
             <div className="text-slate-500">Projet</div>
             <div className="text-white font-medium truncate">{config.projectName || '—'}</div>
@@ -473,6 +496,12 @@ function Step4({
           <div>
             <div className="text-slate-500">OS / Ports</div>
             <div className="text-white">{config.targetOS} / {config.openAllPorts ? 'tous les ports' : `${config.ports.length} port(s)`}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">IP des visiteurs</div>
+            <div className={config.options.preserveClientIp ? 'text-accent-green' : 'text-slate-300'}>
+              {!config.options.preserveClientIp ? 'IP du VPS' : usesFullTunnel(config) ? 'réelle (tunnel complet)' : 'réelle'}
+            </div>
           </div>
         </div>
       </div>
@@ -519,6 +548,20 @@ function Step4({
               </>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-bg-border bg-bg-surface p-4 flex items-start gap-3">
+        <Activity size={16} className="text-accent-green mt-0.5 shrink-0" />
+        <div className="text-xs text-slate-400 leading-relaxed space-y-1">
+          <p>
+            <span className="text-white font-semibold">Diagnostic :</span> sur le VPS, <code className="font-mono text-accent-green">sudo gm-status</code> affiche
+            l'état du tunnel, le dernier handshake du PC local et les compteurs de chaque redirection.
+          </p>
+          <p>
+            <span className="text-white font-semibold">Modifier :</span> ajoutez un port ici, retéléchargez et relancez <code className="font-mono">setup-vps.sh</code> —
+            les anciennes règles sont remplacées sans doublon. Pensez à ouvrir {config.wireguardPort}/UDP et vos ports dans le pare-feu de l'hébergeur.
+          </p>
         </div>
       </div>
 
@@ -591,6 +634,9 @@ export function Config() {
   // Shared with /ports page
   const [ports, setPorts] = useLocalStorage<PortEntry[]>('gm-ports', [])
   const [openAllPorts, setOpenAllPorts] = useLocalStorage('gm-open-all-ports', false)
+  const [storedOptions, setOptions] = useLocalStorage<AdvancedOptions>('gm-cfg-options', DEFAULT_OPTIONS)
+  // Fusion : une sauvegarde d'une version précédente peut ne pas contenir toutes les options
+  const options = { ...DEFAULT_OPTIONS, ...storedOptions }
 
   const config = {
     projectName,
@@ -601,6 +647,7 @@ export function Config() {
     keys,
     ports,
     openAllPorts,
+    options,
   }
 
   const handleReset = () => {
@@ -613,6 +660,7 @@ export function Config() {
     setKeys({ serverPrivateKey: '', serverPublicKey: '', clientPrivateKey: '', clientPublicKey: '' })
     setPorts([])
     setOpenAllPorts(false)
+    setOptions(DEFAULT_OPTIONS)
     setStep(1)
     addToast('Configuration réinitialisée', 'info')
   }
@@ -734,6 +782,7 @@ export function Config() {
             localWgIp={localWgIp} setLocalWgIp={setLocalWgIp}
             wgPort={wgPort} setWgPort={setWgPort}
             targetOS={targetOS} setTargetOS={setTargetOS}
+            options={options} setOptions={setOptions}
           />
         )}
         {step === 2 && <Step2 keys={keys} setKeys={setKeys} addToast={addToast} />}

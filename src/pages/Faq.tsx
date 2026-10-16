@@ -10,6 +10,26 @@ interface FaqItem {
 
 const faqItems: FaqItem[] = [
   {
+    q: 'Mes services voient l\'IP du VPS (10.10.0.1) au lieu de celle du visiteur',
+    a: 'Activez **Conserver l\'IP réelle des visiteurs** dans le Générateur de config, puis relancez `setup-vps.sh` et le script du PC local.\nSur Linux, seules les réponses aux connexions arrivées par le tunnel y retournent (compatible Docker / Coolify) ; le reste du trafic du PC sort par votre box. Vérifiez sur le PC :\n`ip rule`\ndoit afficher une règle `fwmark 0x1092 lookup 4242`.\nSous Windows et macOS, l\'option passe en tunnel complet : tout le trafic internet du PC sort par le VPS.',
+    tags: ['ip réelle', 'client', 'vps'],
+  },
+  {
+    q: 'Comment savoir si la passerelle fonctionne ?',
+    a: 'Sur le VPS :\n`sudo gm-status`\nCette commande affiche l\'interface détectée, le dernier handshake du PC local, le ping du tunnel et les compteurs de chaque redirection. Si le compteur d\'un port augmente mais que la connexion échoue, regardez le pare-feu du PC local ; s\'il reste à 0, le trafic est bloqué avant le VPS (pare-feu de l\'hébergeur).',
+    tags: ['vps', 'vérification'],
+  },
+  {
+    q: 'Comment ajouter un port ou changer de mode sans tout casser ?',
+    a: 'Modifiez la config dans GatewayManager, retéléchargez les fichiers et relancez `setup-vps.sh`. Les règles vivent dans des chaînes dédiées (`GM_PREROUTING`, `GM_FORWARD`…) : elles sont remplacées sans doublon et vos règles Docker / ufw ne sont jamais vidées. Si le mode « IP réelle » ou l\'OS change, relancez aussi le script du PC local.\nPour tout retirer : `sudo bash uninstall-vps.sh`.',
+    tags: ['vps', 'avancé'],
+  },
+  {
+    q: 'Exposer un port différent, une plage, ou limiter l\'accès à certaines IPs',
+    a: 'Dans le formulaire d\'ajout, ouvrez **Plage, port différent, restriction d\'IP** :\n- Port sur le PC : exposez par ex. `2222` publiquement vers le `22` du PC\n- Fin de plage : redirigez `27015-27030` d\'un coup\n- IPs autorisées : seules ces adresses (ou réseaux CIDR) peuvent se connecter — idéal pour RDP ou une base de données.',
+    tags: ['ports', 'avancé'],
+  },
+  {
     q: 'WireGuard ne démarre pas sur le VPS',
     a: 'Vérifiez que les clés sont en base64 valide (44 caractères terminés par `=`). Régénérez avec :\n`wg genkey | tee priv.key | wg pubkey > pub.key`\nVérifiez aussi les permissions : `chmod 600 /etc/wireguard/wg0.conf`.',
     tags: ['vps', 'linux', 'clés'],
@@ -61,7 +81,7 @@ const faqItems: FaqItem[] = [
   },
   {
     q: 'Comment changer l\'interface réseau (eth0 → ens3) ?',
-    a: 'Le script `setup-vps.sh` détecte automatiquement l\'interface principale. Si vous configurez manuellement, trouvez le nom avec :\n`ip route get 8.8.8.8 | awk \'{print $5}\'`\nRemplacez `eth0` par le résultat dans vos règles iptables.',
+    a: 'Rien à faire : `setup-vps.sh` et les commandes de la page Ports détectent automatiquement l\'interface publique (`eth0`, `ens3`, `ens6` chez IONOS…). Pour la voir :\n`ip route get 8.8.8.8`',
     tags: ['vps', 'réseau'],
   },
   {

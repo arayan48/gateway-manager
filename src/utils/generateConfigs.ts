@@ -1,5 +1,11 @@
-import type { ProjectConfig, GeneratedFiles } from '../types'
-import { sanitizeLabel, isValidPort, isValidWgKey, isValidIp } from './helpers'
+import type { ProjectConfig, GeneratedFiles, AdvancedOptions } from '../types'
+import { DEFAULT_OPTIONS } from '../types'
+import { isValidWgKey, isValidIp, formatPortEntry } from './helpers'
+import {
+  CLIENT_ROUTE_TABLE, DETECT_IFACE, GM_DIR, VPS_WG_IP, isValidPortEntry, linuxClientRoutingHooks,
+  vpsDownScript, vpsRemoveRules, vpsStatusScript, vpsUpScript,
+} from './network'
+import type { VpsRulesInput } from './network'
 
 // Bash ANSI color variable references used in generated shell scripts.
 // Stored as regular JS constants (single-quoted strings) so TypeScript does NOT
@@ -34,41 +40,31 @@ function sanitizePort(val: number): number {
   return p >= 1 && p <= 65535 ? p : 51820
 }
 
-// ─── Génère les règles iptables pour les scripts (utilise $IFACE) ───────────
-function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
-  if (cfg.openAllPorts) {
-    const wgPort = sanitizePort(cfg.wireguardPort || 51820)
-    const rules: string[] = [
-      '# Tous les ports (1-65535) sont redirigés vers le PC local — utile pour les services à ports dynamiques (ex: Coolify)',
-      '# SSH et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter',
-      '# Port(s) SSH réellement écoutés — un SSH déplacé (ex: 2222) serait sinon redirigé vers le PC local',
-      `SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true)`,
-      'SSH_PORTS=${SSH_PORTS:-22}',
-      'log "Port(s) SSH conservés sur le VPS : $SSH_PORTS"',
-      'for p in $SSH_PORTS; do iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport "$p" -j RETURN; done',
-      `iptables -t nat -A PREROUTING -i "$IFACE" -p udp --dport ${wgPort} -j RETURN`,
-    ]
-    for (const proto of ['tcp', 'udp']) {
-      rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport 1:65535 -j DNAT --to-destination ${localIp}`)
-      rules.push(`iptables -A FORWARD -p ${proto} -d ${localIp} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)
-    }
-    return rules.join('\n')
+function optionsOf(cfg: ProjectConfig): AdvancedOptions {
+  return { ...DEFAULT_OPTIONS, ...cfg.options }
+}
+
+function sanitizeMtu(val: number | null): number | null {
+  return val !== null && Number.isInteger(val) && val >= 1280 && val <= 1500 ? val : null
+}
+
+function sanitizeKeepalive(val: number): number {
+  return Number.isInteger(val) && val >= 0 && val <= 600 ? val : 25
+}
+
+/** Windows / macOS n'ont pas de routage par marque : conserver l'IP réelle = tunnel complet */
+export function usesFullTunnel(cfg: ProjectConfig): boolean {
+  return optionsOf(cfg).preserveClientIp && (cfg.targetOS === 'windows' || cfg.targetOS === 'macos')
+}
+
+function rulesInput(cfg: ProjectConfig, localIp: string): VpsRulesInput {
+  return {
+    ports: cfg.ports,
+    localIp,
+    wgPort: sanitizePort(cfg.wireguardPort || 51820),
+    openAll: cfg.openAllPorts,
+    preserveClientIp: optionsOf(cfg).preserveClientIp,
   }
-  if (cfg.ports.length === 0) {
-    return '# Aucun port configuré — ajoutez vos redirections ici'
-  }
-  const rules: string[] = []
-  for (const entry of cfg.ports) {
-    if (!isValidPort(entry.port)) continue
-    const protos = entry.protocol === 'tcp+udp' ? ['tcp', 'udp'] : [entry.protocol]
-    const label = sanitizeLabel(entry.label)
-    for (const proto of protos) {
-      rules.push(`# ${label} — ${proto.toUpperCase()} ${entry.port}`)
-      rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport ${entry.port} -j DNAT --to-destination ${localIp}:${entry.port}`)
-      rules.push(`iptables -A FORWARD -p ${proto} -d ${localIp} --dport ${entry.port} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)
-    }
-  }
-  return rules.join('\n')
 }
 
 // ─── Configs WireGuard ────────────────────────────────────────────────────────
@@ -78,11 +74,15 @@ export function generateWg0Server(cfg: ProjectConfig): string {
   const pubClient = sanitizeWgKey(cfg.keys.clientPublicKey,  'CLIENT_PUBLIC_KEY')
   const wgPort   = sanitizePort(cfg.wireguardPort || 51820)
   const localIp  = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
+  const mtu      = sanitizeMtu(optionsOf(cfg).mtu)
 
   return `[Interface]
 PrivateKey = ${privKey}
-Address    = 10.10.0.1/24
+Address    = ${VPS_WG_IP}/24
 ListenPort = ${wgPort}
+${mtu ? `MTU        = ${mtu}\n` : ''}# Règles iptables (redirections, NAT) installées par setup-vps.sh — appliquées / retirées avec le tunnel
+PostUp     = ${GM_DIR}/up.sh %i
+PostDown   = ${GM_DIR}/down.sh %i
 
 [Peer]
 PublicKey  = ${pubClient}
@@ -96,16 +96,37 @@ export function generateWg0Client(cfg: ProjectConfig): string {
   const vpsIp     = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
   const wgPort    = sanitizePort(cfg.wireguardPort || 51820)
   const localIp   = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
+  const opts      = optionsOf(cfg)
+  const mtu       = sanitizeMtu(opts.mtu)
+  const keepalive = sanitizeKeepalive(opts.keepalive)
+  const isLinux   = cfg.targetOS.startsWith('linux-')
+
+  const iface: string[] = [`PrivateKey = ${privKey}`, `Address    = ${localIp}/24`]
+  if (mtu) iface.push(`MTU        = ${mtu}`)
+
+  let allowedIps = `${VPS_WG_IP}/32`
+  if (opts.preserveClientIp && isLinux) {
+    // Le VPS transmet les paquets avec l'IP du visiteur : WireGuard doit les accepter (0.0.0.0/0)
+    // sans pour autant faire passer tout le trafic du PC par le VPS (Table = off + routage par marque)
+    allowedIps = '0.0.0.0/0'
+    const hooks = linuxClientRoutingHooks()
+    iface.push('# IP réelle des visiteurs : seules les réponses aux connexions venues du tunnel y retournent')
+    iface.push('Table      = off')
+    for (const h of hooks.up) iface.push(`PostUp     = ${h}`)
+    for (const h of hooks.down) iface.push(`PostDown   = ${h}`)
+  } else if (usesFullTunnel(cfg)) {
+    // Équivalent de 0.0.0.0/0 sans le « kill switch » WireGuard : l'accès au réseau local est conservé
+    allowedIps = '0.0.0.0/1, 128.0.0.0/1'
+  }
 
   return `[Interface]
-PrivateKey = ${privKey}
-Address    = ${localIp}/24
+${iface.join('\n')}
 
 [Peer]
-PublicKey          = ${pubServer}
-Endpoint           = ${vpsIp}:${wgPort}
-AllowedIPs         = 10.10.0.1/32
-PersistentKeepalive = 25
+PublicKey           = ${pubServer}
+Endpoint            = ${vpsIp}:${wgPort}
+AllowedIPs          = ${allowedIps}
+PersistentKeepalive = ${keepalive}
 `
 }
 
@@ -117,7 +138,9 @@ export function generateSetupVps(cfg: ProjectConfig): string {
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
   const projectName = escapeBash(cfg.projectName || 'GatewayManager')
   const wgConf     = generateWg0Server(cfg)
-  const portRules  = buildIptablesRules(cfg, localIp)
+  const input      = rulesInput(cfg, localIp)
+  const localRe    = localIp.replace(/\./g, '\\.')
+  const modeLabel  = input.preserveClientIp ? 'IP réelle des visiteurs conservée' : 'visiteurs vus avec l\'IP du VPS'
 
   return `#!/bin/bash
 # ==============================================================================
@@ -126,6 +149,7 @@ export function generateSetupVps(cfg: ProjectConfig): string {
 #  IP VPS      : ${vpsIp}
 #  IP client   : ${localIp}
 #  Port WG     : ${wgPort}/UDP
+#  Relançable sans risque : remplace la configuration précédente
 # ==============================================================================
 
 set -euo pipefail
@@ -140,7 +164,7 @@ die()   { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
 step()  { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
 # ─── Bannière ──────────────────────────────────────────────────────────────────
-clear
+clear 2>/dev/null || true
 echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
@@ -153,6 +177,7 @@ echo -e "  Projet  : ${_B}${projectName}${_N}"
 echo -e "  IP VPS  : ${_B}${vpsIp}${_N}"
 echo -e "  Client  : ${_B}${localIp}${_N}"
 echo -e "  Port WG : ${_B}${wgPort}/UDP${_N}"
+echo -e "  Mode    : ${_B}${modeLabel}${_N}"
 echo ""
 
 # ─── Vérifications préalables ──────────────────────────────────────────────────
@@ -167,16 +192,15 @@ else die "Gestionnaire de paquets non supporté (apt / dnf / apk / pacman requis
 fi
 log "Gestionnaire de paquets : $PKG"
 
-# Détection de l'interface réseau principale (eth0, ens3, enp1s0, etc.)
-IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}')
-[[ -z "$IFACE" ]] && IFACE=$(ip -o link show up | awk -F': ' '!/lo/{print $2; exit}')
+# Détection de l'interface réseau principale (eth0, ens3, ens6, enp1s0, etc.)
+${DETECT_IFACE}
 [[ -z "$IFACE" ]] && die "Impossible de détecter l'interface réseau principale.\\n  Vérifiez avec : ip link show"
 log "Interface réseau détectée : $IFACE"
 
 # ─── Étape 1 : Installation WireGuard ─────────────────────────────────────────
 step "1/5  Installation WireGuard"
 
-if command -v wg &>/dev/null; then
+if command -v wg &>/dev/null && command -v iptables &>/dev/null; then
   ok "WireGuard déjà installé — $(wg --version 2>&1 | head -1)"
 else
   log "Installation de WireGuard..."
@@ -184,11 +208,10 @@ else
     apt)
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -qq
-      apt-get install -y -q wireguard wireguard-tools iptables-persistent netfilter-persistent
+      apt-get install -y -q wireguard wireguard-tools iptables
       ;;
     dnf)
-      dnf install -y wireguard-tools iptables-services
-      systemctl enable iptables 2>/dev/null || true
+      dnf install -y wireguard-tools iptables
       ;;
     apk)
       apk add --no-cache wireguard-tools iptables
@@ -200,8 +223,43 @@ else
   ok "WireGuard installé"
 fi
 
-# ─── Étape 2 : Configuration WireGuard ────────────────────────────────────────
-step "2/5  Configuration WireGuard (serveur)"
+# ─── Étape 2 : Scripts GatewayManager ─────────────────────────────────────────
+step "2/5  Installation des règles réseau GatewayManager"
+
+mkdir -p ${GM_DIR}
+chmod 700 ${GM_DIR}
+
+cat > ${GM_DIR}/up.sh << 'GMEOF'
+${vpsUpScript(input)}GMEOF
+
+cat > ${GM_DIR}/down.sh << 'GMEOF'
+${vpsDownScript()}GMEOF
+
+cat > /usr/local/bin/gm-status << 'GMEOF'
+${vpsStatusScript(localIp)}GMEOF
+
+chmod 700 ${GM_DIR}/up.sh ${GM_DIR}/down.sh
+chmod 755 /usr/local/bin/gm-status
+ok "Règles installées dans ${GM_DIR} (appliquées automatiquement avec le tunnel)"
+ok "Commande de diagnostic installée : gm-status"
+
+# Nettoyage des règles écrites directement dans les chaînes système par les anciennes
+# versions de GatewayManager (elles feraient doublon avec les chaînes GM_*)
+cleanup_legacy() { # $1 = table, $2 = chaîne, $3 = motif des règles à retirer
+  iptables -t "$1" -S "$2" 2>/dev/null | grep -E -- "$3" | sed 's/^-A /-D /' | while read -r rule; do
+    eval "iptables -t $1 $rule" 2>/dev/null || true
+  done || true
+}
+cleanup_legacy nat    PREROUTING  '--to-destination ${localRe}(:| |$)|-j RETURN$'
+cleanup_legacy nat    POSTROUTING '-s 10\\.10\\.0\\.0/24 .*-j MASQUERADE$|-o wg0 -j MASQUERADE$'
+cleanup_legacy filter FORWARD     '-d ${localRe}/32 '
+cleanup_legacy filter INPUT       '--dport ${wgPort} -j ACCEPT$|-i wg0 -j ACCEPT$'
+if command -v netfilter-persistent &>/dev/null; then
+  netfilter-persistent save &>/dev/null || true
+fi
+
+# ─── Étape 3 : Configuration WireGuard ────────────────────────────────────────
+step "3/5  Configuration WireGuard (serveur)"
 
 mkdir -p /etc/wireguard
 chmod 700 /etc/wireguard
@@ -225,8 +283,8 @@ if grep -q '<SERVER_PRIVATE_KEY>\\|<CLIENT_PUBLIC_KEY>' /etc/wireguard/wg0.conf;
   warn "Générez des clés avec :  wg genkey | tee /tmp/priv | wg pubkey > /tmp/pub"
 fi
 
-# ─── Étape 3 : Forwarding IP ──────────────────────────────────────────────────
-step "3/5  Activation du forwarding IP"
+# ─── Étape 4 : Forwarding IP ──────────────────────────────────────────────────
+step "4/5  Activation du forwarding IP"
 
 sysctl -w net.ipv4.ip_forward=1 > /dev/null
 if grep -q "^net.ipv4.ip_forward" /etc/sysctl.conf 2>/dev/null; then
@@ -238,35 +296,6 @@ else
 fi
 ok "Forwarding IP activé de façon permanente"
 
-# ─── Étape 4 : Règles iptables ────────────────────────────────────────────────
-step "4/5  Configuration iptables"
-
-# Supprimer les règles existantes pour éviter les doublons
-iptables -t nat -F PREROUTING  2>/dev/null || true
-iptables -t nat -F POSTROUTING 2>/dev/null || true
-iptables -F FORWARD             2>/dev/null || true
-
-# Masquerade sortant : permet au trafic WireGuard d'utiliser l'IP du VPS
-iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o "$IFACE" -j MASQUERADE
-# Masquerade entrant : les réponses aux paquets DNAT repassent par le tunnel WireGuard
-iptables -t nat -A POSTROUTING -o wg0 -j MASQUERADE
-
-# Autoriser le trafic WireGuard entrant
-iptables -A INPUT -p udp --dport ${wgPort} -j ACCEPT
-iptables -A INPUT -i wg0 -j ACCEPT
-
-# Redirections de ports vers le PC client (${localIp})
-${portRules}
-
-# Sauvegarder les règles
-case $PKG in
-  apt)    netfilter-persistent save ;;
-  dnf)    service iptables save 2>/dev/null || iptables-save > /etc/sysconfig/iptables ;;
-  apk)    mkdir -p /etc/iptables && iptables-save > /etc/iptables/rules.v4 ;;
-  pacman) mkdir -p /etc/iptables && iptables-save > /etc/iptables/rules.v4 ;;
-esac
-ok "Règles iptables appliquées et sauvegardées (interface : $IFACE)"
-
 # ─── Étape 5 : Démarrage WireGuard ────────────────────────────────────────────
 step "5/5  Démarrage du service WireGuard"
 
@@ -274,8 +303,8 @@ if command -v systemctl &>/dev/null; then
   systemctl enable wg-quick@wg0
   if systemctl restart wg-quick@wg0; then
     sleep 1
-    systemctl is-active --quiet wg-quick@wg0 \
-      && ok "Service wg-quick@wg0 démarré (systemd)" \
+    systemctl is-active --quiet wg-quick@wg0 \\
+      && ok "Service wg-quick@wg0 démarré (systemd)" \\
       || die "WireGuard instable. Logs : journalctl -u wg-quick@wg0 -n 30"
   else
     echo "" >&2
@@ -290,9 +319,12 @@ elif command -v rc-update &>/dev/null; then
   wg-quick up wg0 || die "WireGuard n'a pas démarré. Vérifiez : wg show"
   ok "Tunnel WireGuard démarré (OpenRC)"
 else
-  wg-quick up /etc/wireguard/wg0.conf || die "WireGuard n'a pas démarré. Vérifiez : cat /etc/wireguard/wg0.conf"
+  wg-quick down wg0 2>/dev/null || true
+  wg-quick up wg0 || die "WireGuard n'a pas démarré. Vérifiez : cat /etc/wireguard/wg0.conf"
   ok "Tunnel WireGuard démarré"
 fi
+iptables -t nat -S GM_PREROUTING &>/dev/null && ok "Règles de redirection actives (interface : $IFACE)" \\
+  || die "Les règles GatewayManager ne sont pas chargées. Logs : journalctl -u wg-quick@wg0 -n 30"
 
 # ─── Résumé final ─────────────────────────────────────────────────────────────
 echo ""
@@ -309,41 +341,67 @@ echo -e "  Port WG     : ${_B}${wgPort}/UDP${_N}"
 echo -e "  Interface   : ${_B}$IFACE${_N}"
 echo ""
 echo -e "  ${_Y}Prochaine étape :${_N}"
-echo -e "  Exécutez ${_B}setup-client.sh${_N} sur votre PC local (serveur de jeux / RDP...)"
+echo -e "  Exécutez ${_B}setup-client${_N} sur votre PC local (serveur de jeux / RDP...)"
 echo ""
-echo -e "  ${_C}Vérification WireGuard :${_N}  wg show"
-echo -e "  ${_C}Vérification iptables  :${_N}  iptables -t nat -L PREROUTING -n -v"
+echo -e "  ${_Y}Pare-feu de l'hébergeur :${_N} ouvrez ${wgPort}/UDP et vos ports redirigés"
+echo -e "  dans le panel (IONOS, OVH, Hetzner…) — ce script ne peut pas le faire pour vous."
 echo ""
+echo -e "  ${_C}État de la passerelle :${_N}  sudo gm-status"
+echo ""
+`
+}
+
+export function generateUninstallVps(): string {
+  return `#!/bin/bash
+# ==============================================================================
+#  GatewayManager — Désinstallation du VPS
+#  Arrête le tunnel, retire toutes les règles GatewayManager et les fichiers installés.
+#  Vos autres règles iptables (Docker, ufw…) ne sont pas touchées.
+# ==============================================================================
+
+set -uo pipefail
+[[ $EUID -ne 0 ]] && { echo "Relancez avec : sudo bash $0"; exit 1; }
+
+if command -v systemctl &>/dev/null; then
+  systemctl disable --now wg-quick@wg0 2>/dev/null || true
+else
+  wg-quick down wg0 2>/dev/null || true
+fi
+
+# Au cas où le tunnel était déjà arrêté sans avoir nettoyé
+${vpsRemoveRules().join('\n')}
+
+rm -rf ${GM_DIR} /usr/local/bin/gm-status
+[[ -f /etc/wireguard/wg0.conf ]] && mv /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.removed
+rm -f /etc/sysctl.d/99-wireguard.conf
+
+echo "GatewayManager désinstallé. Config WireGuard conservée dans /etc/wireguard/wg0.conf.removed"
+echo "Le forwarding IP reste actif jusqu'au prochain redémarrage."
 `
 }
 
 // ─── Script Client Linux ──────────────────────────────────────────────────────
 
-const osInstallInfo: Record<string, { label: string; installCmd: string; iptablesPkg: string }> = {
+const osInstallInfo: Record<string, { label: string; installCmd: string }> = {
   'linux-debian': {
     label:       'Debian 12',
-    installCmd:  'export DEBIAN_FRONTEND=noninteractive\napt-get update -qq\napt-get install -y -q wireguard wireguard-tools',
-    iptablesPkg: '',
+    installCmd:  'export DEBIAN_FRONTEND=noninteractive\napt-get update -qq\napt-get install -y -q wireguard wireguard-tools iptables',
   },
   'linux-ubuntu': {
     label:       'Ubuntu 22.04 / 24.04',
-    installCmd:  'export DEBIAN_FRONTEND=noninteractive\napt-get update -qq\napt-get install -y -q wireguard wireguard-tools',
-    iptablesPkg: '',
+    installCmd:  'export DEBIAN_FRONTEND=noninteractive\napt-get update -qq\napt-get install -y -q wireguard wireguard-tools iptables',
   },
   'linux-fedora': {
     label:       'Fedora / CentOS / RHEL',
-    installCmd:  'dnf install -y wireguard-tools',
-    iptablesPkg: '',
+    installCmd:  'dnf install -y wireguard-tools iptables',
   },
   'linux-alpine': {
     label:       'Alpine Linux',
-    installCmd:  'apk add --no-cache wireguard-tools',
-    iptablesPkg: '',
+    installCmd:  'apk add --no-cache wireguard-tools iptables',
   },
   'linux-arch': {
     label:       'Arch Linux / Manjaro',
-    installCmd:  'pacman -Sy --noconfirm wireguard-tools',
-    iptablesPkg: '',
+    installCmd:  'pacman -Sy --noconfirm wireguard-tools iptables',
   },
 }
 
@@ -383,7 +441,7 @@ die()  { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
 step() { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
 # ─── Bannière ──────────────────────────────────────────────────────────────────
-clear
+clear 2>/dev/null || true
 echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
@@ -414,6 +472,14 @@ fi
 # ─── Étape 2 : Configuration du tunnel ────────────────────────────────────────
 step "2/3  Configuration du tunnel WireGuard"
 
+# Arrêter le tunnel AVANT de remplacer sa config : l'arrêt doit lire l'ancienne
+# (ses PostDown retirent proprement le routage de l'ancien mode)
+if wg show wg0 &>/dev/null; then
+  log "Arrêt du tunnel existant (avec son ancienne configuration)"
+  if command -v systemctl &>/dev/null; then systemctl stop wg-quick@wg0 2>/dev/null || true; fi
+  if wg show wg0 &>/dev/null; then wg-quick down wg0 || true; fi
+fi
+
 mkdir -p /etc/wireguard
 chmod 700 /etc/wireguard
 
@@ -434,6 +500,11 @@ step "3/3  Démarrage du tunnel WireGuard"
 
 ${startCmd}
 ${checkCmd}
+${optionsOf(cfg).preserveClientIp
+  ? `ip rule | grep -q 'lookup ${CLIENT_ROUTE_TABLE}' \\
+  && ok "Routage IP réelle actif : vos services voient l'IP des visiteurs" \\
+  || warn "Routage IP réelle absent — vérifiez : journalctl -u wg-quick@wg0 -n 30"`
+  : 'log "Mode IP du VPS : vos services verront 10.10.0.1 comme source des connexions"'}
 
 # ─── Résumé final ─────────────────────────────────────────────────────────────
 echo ""
@@ -480,7 +551,7 @@ warn() { echo -e "${_Y}[WARN]${_N}  $1"; }
 die()  { echo -e "${_R}[ERR ]${_N}  $1" >&2; exit 1; }
 step() { echo -e "\\n${_B}${_C}──────────────────────────────────────────${_N}"; echo -e "${_B}${_C}  $1${_N}"; echo -e "${_B}${_C}──────────────────────────────────────────${_N}"; }
 
-clear
+clear 2>/dev/null || true
 echo -e "${_B}${_C}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════╗
@@ -526,7 +597,11 @@ wg-quick up   "$WG_DIR/wg0.conf"
 ok "Tunnel WireGuard démarré"
 
 echo ""
-echo -e "${_B}${_G}  ✓  Setup macOS terminé !${_N}"
+echo -e "${_B}${_G}  ✓  Setup macOS terminé !${_N}"${usesFullTunnel(cfg)
+  ? `
+echo -e "  ${_Y}Tunnel complet :${_N} tout le trafic internet du Mac passe par le VPS"
+echo -e "  (nécessaire sous macOS pour que vos services voient l'IP réelle des visiteurs)"`
+  : ''}
 echo -e "  Ping VPS : ${_C}ping -c 3 10.10.0.1${_N}"
 echo -e "  Statut   : ${_C}sudo wg show${_N}"
 echo ""
@@ -597,8 +672,11 @@ $configContent = @'
 ${wgConf}
 '@
 
-$configPath = Join-Path $env:USERPROFILE "wg0-client.conf"
-$configContent | Out-File -FilePath $configPath -Encoding UTF8 -Force
+# Le nom du fichier donne le nom du tunnel (wg0) — dossier réservé aux administrateurs
+$configDir  = Join-Path $env:ProgramData "GatewayManager"
+New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+$configPath = Join-Path $configDir "wg0.conf"
+[System.IO.File]::WriteAllText($configPath, $configContent.Replace("\`r\`n", "\`n"), (New-Object System.Text.UTF8Encoding $false))
 Write-Ok "Fichier de config écrit : $configPath"
 
 # ─── Étape 3 : Installation du service tunnel ─────────────────────────────────
@@ -631,7 +709,12 @@ Write-Host ""
 Write-Host "  VPS cible  : ${vpsIp}:${wgPort}"
 Write-Host "  IP tunnel  : ${localIp}"
 Write-Host ""
-Write-Host "  Vérification : ouvrez l'interface WireGuard ou lancez :" -ForegroundColor Gray
+${usesFullTunnel(cfg)
+  ? `Write-Host "  Tunnel complet : tout le trafic internet du PC passe par le VPS" -ForegroundColor Yellow
+Write-Host "  (nécessaire sous Windows pour que vos services voient l'IP réelle des visiteurs)" -ForegroundColor Yellow
+Write-Host ""
+`
+  : ''}Write-Host "  Vérification : ouvrez l'interface WireGuard ou lancez :" -ForegroundColor Gray
 Write-Host "    ping 10.10.0.1" -ForegroundColor Cyan
 Write-Host "    Test-NetConnection -ComputerName 10.10.0.1 -Port ${wgPort}" -ForegroundColor Cyan
 Write-Host ""
@@ -644,17 +727,32 @@ export function generateReadme(cfg: ProjectConfig): string {
   const vpsIp      = sanitizeIp(cfg.vpsPublicIp, 'VPS_PUBLIC_IP')
   const localIp    = sanitizeIp(cfg.localWireguardIp || '10.10.0.2', 'LOCAL_WG_IP')
   const wgPort     = sanitizePort(cfg.wireguardPort || 51820)
+  const opts       = optionsOf(cfg)
   const osLabel: Record<string, string> = {
     windows: 'Windows', 'linux-debian': 'Debian 12', 'linux-ubuntu': 'Ubuntu 22.04/24.04',
     'linux-fedora': 'Fedora/CentOS/RHEL', 'linux-alpine': 'Alpine Linux',
     'linux-arch': 'Arch Linux/Manjaro', macos: 'macOS',
   }
+  const validPorts = cfg.ports.filter(isValidPortEntry)
   const portLines = cfg.openAllPorts
-    ? '  - Tous les ports    1-65535     TCP+UDP  (usage avancé — ex: Coolify)'
-    : cfg.ports
-        .map((p) => `  - ${p.label.padEnd(15)} port ${String(p.port).padEnd(6)} ${p.protocol.toUpperCase()}`)
+    ? '  - Tous les ports    1-65535     TCP+UDP  (sauf SSH et le port WireGuard — ex: Coolify)'
+    : validPorts
+        .map((p) => {
+          const restrict = p.allowedSources?.trim() ? `  [limité à : ${p.allowedSources.trim()}]` : ''
+          return `  - ${p.label.padEnd(15)} port ${formatPortEntry(p).padEnd(13)} ${p.protocol.toUpperCase()}${restrict}`
+        })
         .join('\n')
   const clientScript = cfg.targetOS === 'windows' ? 'setup-client.ps1' : 'setup-client.sh'
+  const modeText = !opts.preserveClientIp
+    ? `  Vos services voient toutes les connexions venir de ${VPS_WG_IP} (IP du VPS dans le tunnel).
+  Simple et compatible partout, mais les logs, bans et anti-DDoS ne voient pas l'IP réelle.`
+    : usesFullTunnel(cfg)
+      ? `  Vos services voient l'IP réelle des visiteurs.
+  Sous ${osLabel[cfg.targetOS]}, cela passe par un tunnel complet : tout le trafic internet du PC
+  sort par le VPS (le réseau local reste accessible).`
+      : `  Vos services voient l'IP réelle des visiteurs (logs, bans, txAdmin, Coolify/Traefik…).
+  Seules les réponses aux connexions venues du tunnel y retournent : le reste du trafic
+  du PC sort normalement par votre box.`
 
   return `==============================================================================
   GatewayManager — ${cfg.projectName || 'Passerelle VPS WireGuard'}
@@ -674,19 +772,27 @@ INFORMATIONS
   Port WG      : ${wgPort}/UDP
   OS client    : ${osLabel[cfg.targetOS] || cfg.targetOS}
 
+IP DES VISITEURS
+----------------
+${modeText}
+
 PORTS REDIRIGÉS (VPS → PC local)
 ---------------------------------
 ${portLines || '  (aucun port configuré)'}
 
 FICHIERS INCLUS
 ---------------
-  wg0-server.conf  → Config WireGuard à placer sur le VPS
-  wg0-client.conf  → Config WireGuard à placer sur le PC local
-  setup-vps.sh     → Script d'installation complet du VPS       [[VPS]VPS]
-  ${clientScript.padEnd(16)} → Script d'installation du PC local  [[PC]PC LOCAL]
+  wg0-server.conf  → Config WireGuard du VPS (installée par setup-vps.sh)
+  wg0-client.conf  → Config WireGuard du PC local
+  setup-vps.sh     → Installation complète du VPS — relançable sans risque  [VPS]
+  ${clientScript.padEnd(16)} → Installation du PC local                            [PC LOCAL]
+  uninstall-vps.sh → Retire tout ce que GatewayManager a installé sur le VPS [VPS]
 
 ORDRE D'INSTALLATION
 --------------------
+  ÉTAPE 0 — Panel de l'hébergeur (IONOS, OVH, Hetzner…) :
+    Ouvrez ${wgPort}/UDP et vos ports redirigés dans le pare-feu réseau du VPS.
+
   ÉTAPE 1 — Sur le VPS (connexion SSH) :
     scp setup-vps.sh root@${vpsIp}:/root/
     ssh root@${vpsIp}
@@ -697,23 +803,38 @@ ${cfg.targetOS === 'windows'
   ? '    Copier setup-client.ps1 sur le PC\n    Ouvrir PowerShell en Administrateur\n    Exécuter : .\\setup-client.ps1'
   : `    scp setup-client.sh user@<IP_PC>:/tmp/\n    ssh user@<IP_PC>\n    sudo bash /tmp/setup-client.sh`}
 
+MODIFIER LA CONFIGURATION (ajout de port, changement de mode…)
+--------------------------------------------------------------
+  Régénérez les fichiers dans GatewayManager puis relancez setup-vps.sh :
+  les anciennes règles sont remplacées, rien n'est dupliqué, Docker/ufw ne sont pas touchés.
+  Si le mode « IP des visiteurs » ou l'OS change, relancez aussi le script du PC local.
+
 VÉRIFICATION
 ------------
-  Sur le VPS :
-    wg show
-    iptables -t nat -L PREROUTING -n -v
+  Sur le VPS — diagnostic complet (tunnel, handshake, compteurs par port) :
+    sudo gm-status
 
   Depuis n'importe où :
 ${cfg.openAllPorts
   ? `    nc -zv ${vpsIp} <PORT>  # remplacez <PORT> par le port réellement utilisé (ex: 8000 pour Coolify)`
-  : cfg.ports.map((p) => `    nc -zv ${vpsIp} ${String(p.port).padEnd(6)}# ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
+  : validPorts.map((p) => `    nc -zv ${vpsIp} ${String(p.port).padEnd(6)}# ${p.label}`).join('\n') || `    nc -zv ${vpsIp} <PORT>`}
 
 DÉPANNAGE
 ---------
   - WireGuard ne démarre pas  → vérifiez les clés (base64, 44 caractères)
-  - Tunnel inactif            → vérifiez que le port ${wgPort}/UDP est ouvert sur le VPS
-  - Ports inaccessibles       → vérifiez ip_forward=1 et les règles iptables
-  - Interface réseau          → détectée automatiquement par setup-vps.sh (eth0, ens3, ens6…)
+  - Aucun handshake           → ${wgPort}/UDP fermé dans le pare-feu de l'hébergeur
+  - Ports inaccessibles       → sudo gm-status : les compteurs du port augmentent-ils ?
+                                 oui → pare-feu du PC local ; non → pare-feu de l'hébergeur
+  - Interface réseau          → détectée automatiquement (eth0, ens3, ens6…)
+
+DÉSINSTALLATION
+---------------
+  VPS      : sudo bash uninstall-vps.sh
+  PC local : ${cfg.targetOS === 'windows'
+    ? '"C:\\Program Files\\WireGuard\\wireguard.exe" /uninstalltunnelservice wg0'
+    : cfg.targetOS === 'macos'
+      ? 'sudo wg-quick down /usr/local/etc/wireguard/wg0.conf'
+      : 'sudo systemctl disable --now wg-quick@wg0'}
 
 ==============================================================================
   Généré par GatewayManager
@@ -728,6 +849,7 @@ export function generateAllFiles(cfg: ProjectConfig): GeneratedFiles {
     'wg0-server.conf': generateWg0Server(cfg),
     'wg0-client.conf': generateWg0Client(cfg),
     'setup-vps.sh':    generateSetupVps(cfg),
+    'uninstall-vps.sh': generateUninstallVps(),
     'README.txt':      generateReadme(cfg),
   }
 
