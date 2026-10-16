@@ -97,12 +97,18 @@ describe('generateAllFiles', () => {
     const files = generateAllFiles({ ...baseConfig, openAllPorts: true, wireguardPort: 51820 })
     const vpsScript = files['setup-vps.sh']
     const dnatIndex = vpsScript.indexOf('--dport 1:65535 -j DNAT')
-    const sshReturnIndex = vpsScript.indexOf('--dport 22 -j RETURN')
+    const sshReturnIndex = vpsScript.indexOf('--dport "$p" -j RETURN')
     const wgReturnIndex = vpsScript.indexOf('--dport 51820 -j RETURN')
     expect(sshReturnIndex).toBeGreaterThan(-1)
     expect(wgReturnIndex).toBeGreaterThan(-1)
     expect(sshReturnIndex).toBeLessThan(dnatIndex)
     expect(wgReturnIndex).toBeLessThan(dnatIndex)
+  })
+
+  it('detects the real SSH port and falls back to 22 so a moved SSH is not redirected', () => {
+    const vpsScript = generateAllFiles({ ...baseConfig, openAllPorts: true })['setup-vps.sh']
+    expect(vpsScript).toContain(`SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true)`)
+    expect(vpsScript).toContain('SSH_PORTS=${SSH_PORTS:-22}')
   })
 
   it('sanitizes project name in scripts', () => {

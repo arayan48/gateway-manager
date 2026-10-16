@@ -37,7 +37,7 @@ const OS_OPTIONS: { value: PortOS; label: string; sublabel: string; icon: IconTy
 const OS_NOTE: Record<PortOS, { type: 'info' | 'warn'; text: string }> = {
   'linux-vps': {
     type: 'info',
-    text: 'Ces commandes sont à exécuter sur le VPS. Remplacez eth0 par le nom de votre interface réseau principale si nécessaire (détectable avec : ip route get 8.8.8.8).',
+    text: 'Ces commandes sont à exécuter sur le VPS (en root), dans le même terminal : la première ligne détecte l\'interface réseau publique (eth0, ens3, ens6…) et les suivantes l\'utilisent via $IFACE.',
   },
   'linux-client': {
     type: 'info',

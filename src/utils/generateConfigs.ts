@@ -40,8 +40,12 @@ function buildIptablesRules(cfg: ProjectConfig, localIp: string): string {
     const wgPort = sanitizePort(cfg.wireguardPort || 51820)
     const rules: string[] = [
       '# Tous les ports (1-65535) sont redirigés vers le PC local — utile pour les services à ports dynamiques (ex: Coolify)',
-      '# SSH (22) et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter',
-      'iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport 22 -j RETURN',
+      '# SSH et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter',
+      '# Port(s) SSH réellement écoutés — un SSH déplacé (ex: 2222) serait sinon redirigé vers le PC local',
+      `SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true)`,
+      'SSH_PORTS=${SSH_PORTS:-22}',
+      'log "Port(s) SSH conservés sur le VPS : $SSH_PORTS"',
+      'for p in $SSH_PORTS; do iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport "$p" -j RETURN; done',
       `iptables -t nat -A PREROUTING -i "$IFACE" -p udp --dport ${wgPort} -j RETURN`,
     ]
     for (const proto of ['tcp', 'udp']) {
@@ -709,7 +713,7 @@ DÉPANNAGE
   - WireGuard ne démarre pas  → vérifiez les clés (base64, 44 caractères)
   - Tunnel inactif            → vérifiez que le port ${wgPort}/UDP est ouvert sur le VPS
   - Ports inaccessibles       → vérifiez ip_forward=1 et les règles iptables
-  - Interface réseau          → adaptez si votre VPS n'utilise pas eth0
+  - Interface réseau          → détectée automatiquement par setup-vps.sh (eth0, ens3, ens6…)
 
 ==============================================================================
   Généré par GatewayManager

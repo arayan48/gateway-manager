@@ -5,6 +5,12 @@ export type PortOS = 'linux-vps' | 'linux-client' | 'windows' | 'macos'
 
 const ALL_PORTS_NOTE = '# Tous les ports (1-65535) sont redirigés — utile pour les services à ports dynamiques (ex: Coolify)'
 
+// Même détection que setup-vps.sh : l'interface publique s'appelle eth0, ens3, ens6, enp1s0… selon l'hébergeur
+const DETECT_IFACE = `IFACE=$(ip route get 8.8.8.8 | awk '{for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}')`
+
+// Port(s) SSH réellement écoutés — un SSH déplacé (ex: 2222) serait sinon redirigé vers le PC local
+const DETECT_SSH_PORTS = `SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true); SSH_PORTS=\${SSH_PORTS:-22}`
+
 // ─── Linux VPS — iptables DNAT (redirection vers le PC local via WireGuard) ──
 
 export function generateIptablesRules(
@@ -15,34 +21,41 @@ export function generateIptablesRules(
   wgPort = 51820
 ): string[] {
   const local = localWgIp || '10.10.0.2'
-  const rules: string[] = []
+  const rules: string[] = [
+    '# Interface réseau publique du VPS (détectée automatiquement)',
+    DETECT_IFACE,
+    'sysctl -w net.ipv4.ip_forward=1',
+    '',
+  ]
 
   if (openAll) {
     rules.push(ALL_PORTS_NOTE)
-    rules.push('# SSH (22) et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter')
-    rules.push(`iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 22 -j RETURN`)
-    rules.push(`iptables -t nat -A PREROUTING -i eth0 -p udp --dport ${wgPort} -j RETURN`)
+    rules.push('# SSH et le port WireGuard lui-même restent servis par le VPS — sinon vous perdez SSH et le tunnel ne peut plus se monter')
+    rules.push(DETECT_SSH_PORTS)
+    rules.push(`for p in $SSH_PORTS; do iptables -t nat -A PREROUTING -i "$IFACE" -p tcp --dport "$p" -j RETURN; done`)
+    rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p udp --dport ${wgPort} -j RETURN`)
     for (const proto of ['tcp', 'udp']) {
-      rules.push(`iptables -t nat -A PREROUTING -i eth0 -p ${proto} --dport 1:65535 -j DNAT --to-destination ${local}`)
+      rules.push(`iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport 1:65535 -j DNAT --to-destination ${local}`)
       rules.push(`iptables -A FORWARD -p ${proto} -d ${local} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`)
     }
-    rules.push(`iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE`)
-    return rules
-  }
-
-  for (const entry of ports) {
-    const protos = entry.protocol === 'tcp+udp' ? ['tcp', 'udp'] : [entry.protocol]
-    for (const proto of protos) {
-      rules.push(
-        `iptables -t nat -A PREROUTING -i eth0 -p ${proto} --dport ${entry.port} -j DNAT --to-destination ${local}:${entry.port}  # ${sanitizeLabel(entry.label)}`
-      )
-      rules.push(
-        `iptables -A FORWARD -p ${proto} -d ${local} --dport ${entry.port} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`
-      )
+  } else {
+    for (const entry of ports) {
+      const protos = entry.protocol === 'tcp+udp' ? ['tcp', 'udp'] : [entry.protocol]
+      for (const proto of protos) {
+        rules.push(
+          `iptables -t nat -A PREROUTING -i "$IFACE" -p ${proto} --dport ${entry.port} -j DNAT --to-destination ${local}:${entry.port}  # ${sanitizeLabel(entry.label)}`
+        )
+        rules.push(
+          `iptables -A FORWARD -p ${proto} -d ${local} --dport ${entry.port} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`
+        )
+      }
     }
   }
 
-  rules.push(`iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE`)
+  rules.push('')
+  rules.push('# Les réponses du PC local doivent repartir par le tunnel (sinon elles sortent par sa box et la connexion échoue)')
+  rules.push(`iptables -t nat -A POSTROUTING -o wg0 -j MASQUERADE`)
+  rules.push(`iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o "$IFACE" -j MASQUERADE`)
   return rules
 }
 
@@ -148,8 +161,9 @@ export function generateWindowsRules(ports: PortEntry[], openAll = false): strin
   if (openAll) {
     return [
       '# Ouvrir tous les ports entrants (PowerShell en Administrateur)',
-      'New-NetFirewallRule -DisplayName "WG-AllPorts-TCP" -Direction Inbound -Protocol TCP -LocalPort 1-65535 -Action Allow',
-      'New-NetFirewallRule -DisplayName "WG-AllPorts-UDP" -Direction Inbound -Protocol UDP -LocalPort 1-65535 -Action Allow',
+      '# Limité au tunnel WireGuard : le PC reste fermé sur le réseau local / Wi-Fi public',
+      'New-NetFirewallRule -DisplayName "WG-AllPorts-TCP" -Direction Inbound -Protocol TCP -LocalPort 1-65535 -RemoteAddress 10.10.0.0/24 -Action Allow',
+      'New-NetFirewallRule -DisplayName "WG-AllPorts-UDP" -Direction Inbound -Protocol UDP -LocalPort 1-65535 -RemoteAddress 10.10.0.0/24 -Action Allow',
     ]
   }
   const lines: string[] = ['# Ouvrir les ports entrants (PowerShell en Administrateur)']
@@ -202,8 +216,9 @@ export function generateMacOSRules(ports: PortEntry[], openAll = false): string[
       '# Ajouter dans /etc/pf.conf (section "pass rules") :',
       '',
       ALL_PORTS_NOTE,
-      'pass in proto tcp from any to any port 1:65535',
-      'pass in proto udp from any to any port 1:65535',
+      '# Limité au tunnel WireGuard : le Mac reste fermé sur le réseau local / Wi-Fi public',
+      'pass in proto tcp from 10.10.0.0/24 to any port 1:65535',
+      'pass in proto udp from 10.10.0.0/24 to any port 1:65535',
       '',
       '# Appliquer les règles :',
       'sudo pfctl -f /etc/pf.conf -e',
